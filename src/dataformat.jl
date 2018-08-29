@@ -36,7 +36,7 @@ function rescaleUV!!(U,V,Lon,Lat)
 	end
 end
 
-function read_ocean_velocities(howmany,ww_ocean_data)
+function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true)
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     Us = zeros(length(Lon),length(Lat),howmany)
@@ -52,10 +52,65 @@ function read_ocean_velocities(howmany,ww_ocean_data)
     	Us[:,:,index] .= U
     	Vs[:,:,index] .= V
     end
-    return Lon,Lat,Us,Vs,times
+
+    sLon = size(Lon)[1]
+    sLat = size(Lat)[1]
+    stimes = size(times)[1]
+
+    LonS = SharedArray{Float64}(sLon)
+    LatS = SharedArray{Float64}(sLat)
+    timesS = SharedArray{Float64}(stimes)
+
+    LonS .= Lon
+    LatS .= Lat
+    timesS .= times
+
+    UsS = SharedArray{Float64}(sLon,sLat,stimes)
+    VsS = SharedArray{Float64}(sLon,sLat,stimes)
+    Ust1S = SharedArray{Float64}(sLon,sLat,1)
+
+    UsS .= Us
+    VsS .= Vs
+    Ust1S .= Us[:,:,1:1]
+
+
+
+    UsS .= Us
+    VsS .= Vs
+    Ust1S .= Us[:,:,1:1]
+
+
+    #Remove NaN values
+
+    if remove_nan
+        #=
+        for j in 1:sLat
+            for i in 1:sLon
+            	if isnan(Ust1S[i,j])
+                		UsS[i,j,:] .= 0
+                		VsS[i,j,:] .= 0
+            	end
+            end
+        end
+        =#
+
+        for t in 1:stimes
+            for j in 1:sLat
+            	for i in 1:sLon
+            	    if isnan(UsS[i,j,t])
+                		UsS[i,j,t] = 0.0
+            	    end
+            	    if isnan(Vs[i,j,t])
+                		VsS[i,j,t] = 0.0
+            	    end
+            	end
+            end
+        end
+    end
+    return LonS,LatS,UsS,VsS,timesS,Ust1S
 end
 
-function read_ssh(howmany,ww_ocean_data)
+function read_ssh(howmany,ww_ocean_data,remove_nan=true)
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     sshs = zeros(length(Lon),length(Lat),howmany)
@@ -68,5 +123,45 @@ function read_ssh(howmany,ww_ocean_data)
     	times[index] = t
     	sshs[:,:,index] .= ssh
     end
-    return Lon,Lat,sshs,times
+
+    sLon = size(Lon)[1]
+    sLat = size(Lat)[1]
+    stimes = size(times)[1]
+
+    LonS = SharedArray{Float64}(sLon)
+    LatS = SharedArray{Float64}(sLat)
+    timesS = SharedArray{Float64}(stimes)
+
+    LonS .= Lon
+    LatS .= Lat
+    timesS .= times
+
+    sshsS = SharedArray{Float64}(sLon,sLat,stimes)
+    sshst1S = SharedArray{Float64}(sLon,sLat,1)
+    sshsS .= sshs
+    sshst1S .= sshs[:,:,1:1]
+
+
+    if remove_nan
+        #=
+        for j in 1:sLat
+            for i in 1:sLon
+            	if isnan(sshst1S[i,j])
+                        sshsA[i,j,:] .= 0
+            	end
+            end
+        end
+        =#
+
+        for t in 1:stimes
+            for j in 1:sLat
+            	for i in 1:sLon
+            	    if isnan(sshsS[i,j,t])
+                		sshsS[i,j,t] = 0.0
+            	    end
+            	end
+            end
+        end
+    end
+    return LonS,LatS,sshsS,timesS,sshst1S
 end

@@ -1,6 +1,6 @@
 module CopernicusUtils
 
-    using Tensors, StaticArrays, SparseArrays
+    using Tensors, StaticArrays, SparseArrays, SharedArrays
 
     import Images
     import NetCDF
@@ -10,7 +10,5 @@ module CopernicusUtils
     include("misc.jl")
 
 
-    include("exports.jl")
+    include("export.jl")
 end
-
-
