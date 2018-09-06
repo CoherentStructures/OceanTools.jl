@@ -214,7 +214,7 @@ end
         xindex::Int64,yindex::Int64,tindex::Int64,
         nx::Int64,ny::Int64,nt::Int64,Us::U,
         x::T, y::T, t::T,
-        )::SVector{2,T} where {T,U}
+        )::SVector{3,T} where {T,U}
     xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
     dxp::SVector{4,T} = SVector{4,T}((0.0,1.0,2*x,3*x^2))
     yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
@@ -222,6 +222,7 @@ end
     tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
     result1::T = zero(T)
     result2::T = zero(T)
+    result3::T = zero(T)
 
     #Specify point values
     @inbounds for k in 0:1, j in 0:1, i in 0:1
@@ -230,6 +231,7 @@ end
         aindex::Int64 = i + 2*j + 4*k +1
         tmpresult1::T = zero(T)
         tmpresult2::T = zero(T)
+        tmpresult3::T = zero(T)
         @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex::Int64 = A.rowval[r] - 1
             xValIndex::Int64 = rowIndex % 4
@@ -237,9 +239,11 @@ end
             tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
             tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
             tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
         end
         result1 += res*tmpresult1
         result2 += res*tmpresult2
+        result3 += res*tmpresult3
     end
 
     #Specify first derivatives
@@ -261,6 +265,7 @@ end
 
             tmpresult1::T = zero(T)
             tmpresult2::T = zero(T)
+            tmpresult3::T = zero(T)
 
             @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                 rowIndex::Int64 = A.rowval[r] - 1
@@ -269,10 +274,12 @@ end
                 tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
                 tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
                 tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+                tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
             end
 
             result1 += res*tmpresult1
             result2 += res*tmpresult2
+            result3 += res*tmpresult3
         end
     end
 
@@ -303,6 +310,7 @@ end
 
                     tmpresult1::T = zero(T)
                     tmpresult2::T = zero(T)
+                    tmpresult3::T = zero(T)
 
                     @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                         rowIndex::Int64 = A.rowval[r] - 1
@@ -312,10 +320,12 @@ end
 
                         tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
                         tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+                        tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
                     end
 
                     result1 += res*tmpresult1
                     result2 += res*tmpresult2
+                    result3 += res*tmpresult3
             end
         end
     end
@@ -336,6 +346,7 @@ end
 
         tmpresult1::T = zero(T)
         tmpresult2::T = zero(T)
+        tmpresult3::T = zero(T)
 
         @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex = A.rowval[r] - 1
@@ -345,13 +356,15 @@ end
 
             tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
             tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
         end
 
         result1 += res*tmpresult1
         result2 += res*tmpresult2
+        result3 += res*tmpresult3
 
     end
-    return SVector{2,T}((result1,result2))
+    return SVector{3,T}((result1,result2,result3))
 end
 
 #Function barrier version
@@ -413,8 +426,45 @@ function fast_tricubic_earth_interpolate_gradient_internal(u::StaticVector{2,T},
     yindex::Int64, ycoord::T = gooddivrem((mod((u[2] - ll2), 180)*ny)/180.0,1)
     tindex::Int64, tcoord::T = gooddivrem((nt-1)*(t-t0)/(tf-t0),1)
 
-    res1::SVector{2,T} = base_tricubic_interpolation_gradient(xindex,yindex,tindex,nx,ny,nt,sshs, xcoord, ycoord,tcoord)
+    res1::SVector{3,T} = base_tricubic_interpolation_gradient(xindex,yindex,tindex,nx,ny,nt,sshs, xcoord, ycoord,tcoord)
     return SVector{2,T}((res1[1]*nx/360,res1[2]*ny/180))
+end
+
+
+#Function barrier version
+function fast_tricubic_earth_interpolate_eqvari(u::StaticMatrix{2,3,T},p,tin::Float64) where {T<:Real}
+    Us = p[1]
+    Vs = p[2]
+    return fast_tricubic_earth_interpolate_eqvari_internal(u,Us,Vs,p,tin)
+end
+
+
+function fast_tricubic_earth_interpolate_eqvari_internal(
+    uIn::StaticMatrix{2,3,T}, Us::S,Vs::S,p,tin::Float64) where {T<:Real,S,U}
+    u = @SVector [uIn[1,1], uIn[2,1]]
+    nx::Int64 = size(Us)[1]
+    ny::Int64 = size(Us)[2]
+    nt::Int64 = size(Us)[3]
+    #Get the spatial bounds from p
+    ll1::Float64,ur1::Float64  = p[3]
+    ll2::Float64,ur2::Float64 = p[4]
+    t0::Float64,tf::Float64 = p[5]
+    t::Float64 = tin
+    if t > tf
+        t = tf
+    end
+    if t < t0
+        t = t0
+    end
+    xindex::Int64, xcoord::T = gooddivrem((mod((u[1] - ll1), 360)*nx)/360.0,1)
+    yindex::Int64, ycoord::T = gooddivrem((mod((u[2] - ll2), 180)*ny)/180.0,1)
+    tindex::Int64, tcoord::T = gooddivrem((nt-1)*(t-t0)/(tf-t0),1)
+
+    Uitp::SVector{3,T} = base_tricubic_interpolation_gradient(xindex,yindex,tindex,nx,ny,nt,Us, xcoord, ycoord,tcoord)
+    Vitp::SVector{3,T} = base_tricubic_interpolation_gradient(xindex,yindex,tindex,nx,ny,nt,Vs, xcoord, ycoord,tcoord)
+
+    return @SMatrix [Uitp[3] (Uitp[1]*uIn[1,2]*nx/360 + Uitp[2]*uIn[2,2]*ny/180) (Uitp[1]*uIn[1,3]*nx/360 + Uitp[2]*uIn[2,3]*ny/180);
+    Vitp[3] (Vitp[1]*uIn[1,2]*nx/360  + Vitp[2]*uIn[2,2]*ny/180) (Vitp[1]*uIn[1,3]*nx/360 + Vitp[2]*uIn[2,3]*ny/180)]
 end
 
 function interp_inbounds(x,y,p)
