@@ -5,7 +5,7 @@ include("coeff.jl")
 #Just divrem, but casts the first result to Int
 @inline function gooddivrem(x::T,y::Int64)::Tuple{Int64,T} where T
     a,b = divrem(x,y)
-    return Int64(a), b
+    return Base.unsafe_trunc(Int,a), b
 end
 
 #=
@@ -91,24 +91,27 @@ end
         xindex::Int64,yindex::Int64,tindex::Int64,
         nx::Int64,ny::Int64,nt::Int64,Us::U,
         x::T, y::T, t::T,
-        )::T where {T,S,U}
+        )::T where {T,U}
     xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
     yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
     tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
     result::T = zero(T)
+
 
     #Specify point values
     @inbounds for k in 0:1, j in 0:1, i in 0:1
         current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex + j,tindex + k)
         res::T = Us[earthIndex(current_index,nx,ny,nt)]
         aindex::Int64 = i + 2*j + 4*k +1
-        for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+        tmpresult::T = zero(T)
+        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex::Int64 = A.rowval[r] - 1
             xValIndex::Int64 = rowIndex % 4
             yValIndex::Int64 = (div( (rowIndex - xValIndex),4)) % 4
             tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            result += res*A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
         end
+        result += res*tmpresult
     end
 
     #Specify first derivatives
@@ -128,16 +131,18 @@ end
             res /= 2.0
             aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
 
-            for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+            tmpresult::T = zero(T)
+
+            @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                 rowIndex::Int64 = A.rowval[r] - 1
                 xValIndex::Int64 = rowIndex % 4
                 yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
                 tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                result += res*A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+                tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
             end
+            result += tmpresult*res
         end
     end
-
 
     #Specify (mixed) second derivatives
 
@@ -163,13 +168,16 @@ end
                     res /= 4.0
                     aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
 
-                    for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+                    tmpresult = zero(T)
+
+                    @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                         rowIndex::Int64 = A.rowval[r] - 1
                         xValIndex::Int64 = rowIndex % 4
                         yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
                         tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                        result += res*A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+                        tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
                     end
+                    result += res*tmpresult
             end
         end
     end
@@ -188,13 +196,16 @@ end
         res /= 8.0
         aindex = i + 2*j + 4*k + 56 + 1
 
-        for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+        tmpresult = zero(T)
+
+        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex = A.rowval[r] - 1
             xValIndex::Int64 = rowIndex % 4
             yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
             tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            result += res*A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
         end
+        result += res*tmpresult
     end
     return result
 end
@@ -203,7 +214,7 @@ end
         xindex::Int64,yindex::Int64,tindex::Int64,
         nx::Int64,ny::Int64,nt::Int64,Us::U,
         x::T, y::T, t::T,
-        )::SVector{2,T} where {T,S,U}
+        )::SVector{2,T} where {T,U}
     xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
     dxp::SVector{4,T} = SVector{4,T}((0.0,1.0,2*x,3*x^2))
     yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
@@ -217,14 +228,18 @@ end
         current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex + j,tindex + k)
         res::T = Us[earthIndex(current_index,nx,ny,nt)]
         aindex::Int64 = i + 2*j + 4*k +1
-        for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+        tmpresult1::T = zero(T)
+        tmpresult2::T = zero(T)
+        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex::Int64 = A.rowval[r] - 1
             xValIndex::Int64 = rowIndex % 4
             yValIndex::Int64 = (div( (rowIndex - xValIndex),4)) % 4
             tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            result1 += res*A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            result2 += res*A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
         end
+        result1 += res*tmpresult1
+        result2 += res*tmpresult2
     end
 
     #Specify first derivatives
@@ -244,14 +259,20 @@ end
             res /= 2.0
             aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
 
-            for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+            tmpresult1::T = zero(T)
+            tmpresult2::T = zero(T)
+
+            @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                 rowIndex::Int64 = A.rowval[r] - 1
                 xValIndex::Int64 = rowIndex % 4
                 yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
                 tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                result1 += res*A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                result2 += res*A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+                tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+                tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
             end
+
+            result1 += res*tmpresult1
+            result2 += res*tmpresult2
         end
     end
 
@@ -259,7 +280,7 @@ end
     #Specify (mixed) second derivatives
 
     @inbounds for k in 0:1, j in 0:1, i in 0:1
-        for ddirection1 in 1:2
+        @simd for ddirection1 in 1:2
             if ddirection1 == 1
                 ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
             else
@@ -280,15 +301,21 @@ end
                     res /= 4.0
                     aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
 
-                    for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+                    tmpresult1::T = zero(T)
+                    tmpresult2::T = zero(T)
+
+                    @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
                         rowIndex::Int64 = A.rowval[r] - 1
                         xValIndex::Int64 = rowIndex % 4
                         yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
                         tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
 
-                        result1 += res*A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                        result2 += res*A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+                        tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+                        tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
                     end
+
+                    result1 += res*tmpresult1
+                    result2 += res*tmpresult2
             end
         end
     end
@@ -307,15 +334,21 @@ end
         res /= 8.0
         aindex = i + 2*j + 4*k + 56 + 1
 
-        for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
+        tmpresult1::T = zero(T)
+        tmpresult2::T = zero(T)
+
+        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
             rowIndex = A.rowval[r] - 1
             xValIndex::Int64 = rowIndex % 4
             yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
             tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
 
-            result1 += res*A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            result2 += res*A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
+            tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
         end
+
+        result1 += res*tmpresult1
+        result2 += res*tmpresult2
 
     end
     return SVector{2,T}((result1,result2))
