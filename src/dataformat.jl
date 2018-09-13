@@ -165,3 +165,22 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true)
     end
     return LonS,LatS,sshsS,timesS,sshst1S
 end
+
+function getP(foldername; ndays=90, sshs=true,remove_nan=true)
+    Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan)
+    if sshs
+        Lon,Lat, sshs,times,sshsT1 = read_ssh(ndays,foldername,remove_nan)
+    else
+        sshs  = nothing
+    end
+
+    p = (
+        Us,Vs,
+        (Lon[1],Lon[end]),(Lat[1],Lat[end]), (times[1],times[end]),
+        ( Ust1,Ust1,(Lon[1],Lon[end]), (Lat[1],Lat[end]),(times[1],times[2])),
+        sshs
+         )
+    return p,times
+end
+
+

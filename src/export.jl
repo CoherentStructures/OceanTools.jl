@@ -5,4 +5,5 @@ export
    fast_tricubic_earth_interpolate_eqvari,
    sshVelocityRHS,
    read_ocean_velocities,
-   read_ssh
+   read_ssh,
+   getP

@@ -1,4 +1,4 @@
-Base.HOME_PROJECT[] = abspath(Base.HOME_PROJECT[]) # JuliaLang/julia/pull/28625
+#Base.HOME_PROJECT[] = abspath(Base.HOME_PROJECT[]) # JuliaLang/julia/pull/28625
 ENV["GKSwstype"] = "100"
 
 using Documenter, CopernicusUtils
@@ -11,7 +11,7 @@ makedocs(
     sitename="CopernicusUtils.jl",
     pages = Any[
         "Home" => "index.md"
-        "Examples" => "examples.md"
+        "Example Usage" => "example.md"
     ]
     )
 
