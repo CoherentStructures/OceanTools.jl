@@ -1,4 +1,7 @@
-#Base.HOME_PROJECT[] = abspath(Base.HOME_PROJECT[]) # JuliaLang/julia/pull/28625
+if Base.HOME_PROJECT[] != nothing
+    Base.HOME_PROJECT[] = abspath(Base.HOME_PROJECT[])
+end
+
 ENV["GKSwstype"] = "100"
 
 using Documenter, CopernicusUtils
