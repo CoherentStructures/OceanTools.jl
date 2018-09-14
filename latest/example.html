@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Example Usage · CopernicusUtils.jl</title><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link href="assets/documenter.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><h1>CopernicusUtils.jl</h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="search.html"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="index.html">Home</a></li><li class="current"><a class="toctext" href="example.html">Example Usage</a><ul class="internal"></ul></li></ul></nav><article id="docs"><header><nav><ul><li><a href="example.html">Example Usage</a></li></ul><a class="edit-page" href="https://github.com/CoherentStructures/CopernicusUtils.jl/blob/master/docs/src/example.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Example Usage</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Example-Usage-1" href="#Example-Usage-1">Example Usage</a></h1><pre><code class="language-none">using  Distributed, Tensors, StaticArrays, Statistics, Plots
+addprocs(4) #Use 4 processors
+
+import CoherentStructures
+using CopernicusUtils
+
+#Directory containing files like nrt_global_allsat_phy_l4_20170108_20170114.nc
+ww_ocean_data = &quot;/media/public/schillna/ocean1/worldwide_ocean_data/&quot;
+
+#Read in data into p, missing values are set to zero
+p,times = getP(ww_ocean_data, ndays=90, sshs=true,remove_nan=true)
+
+#Garbage collection on all processors
+@everywhere GC.gc()
+
+#Bounding corners of the box on which to plot
+LL = [147.0,15.0]
+UR = [180.0,48.0]
+
+CoherentStructures.plot_ftle(
+       fast_trilinear_earth_interpolate,p,
+       [times[1],times[end]],
+       LL,UR,500,500;
+       tolerance=1e-6,
+       aspect_ratio=1,
+       title=&quot;FTLE Field&quot;
+       )</code></pre><p><img src="https://cdn.rawgit.com/CoherentStructures/CopernicusUtils.jl/bfaf27a6/docs/example_ftle.png" alt/></p><footer><hr/><a class="previous" href="index.html"><span class="direction">Previous</span><span class="title">Home</span></a></footer></article></body></html>
