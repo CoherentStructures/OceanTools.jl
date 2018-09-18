@@ -25,6 +25,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "index.html#Installation-1",
+    "page": "Home",
+    "title": "Installation",
+    "category": "section",
+    "text": "Run the following in the Julia REPL:]add https://github.com/CoherentStructures/CopernicusUtils.jl.git"
+},
+
+{
     "location": "index.html#Disclaimer-1",
     "page": "Home",
     "title": "Disclaimer",
