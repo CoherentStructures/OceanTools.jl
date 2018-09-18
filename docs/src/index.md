@@ -13,6 +13,12 @@ These are written to be
 
 This package was developed by Nathanael Schilling at TUM. 
 
+## Installation
+
+Run the following in the Julia REPL:
+
+    ]add https://github.com/CoherentStructures/CopernicusUtils.jl.git
+
 # Disclaimer
 
 These functions have not been tested in detail and probably have bugs. The author of this package is in no way affiliated with Copernicus.
