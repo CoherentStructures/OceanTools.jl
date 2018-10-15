@@ -2,9 +2,103 @@
 #Constants needed for tricubic interpolation
 include("coeff.jl")
 
+
+function build_full_finite_difference_matrix()
+    result = spzeros(Int8,64,64)
+    function to1d(i,j,k)
+        return i + j*4 + k*4*4
+    end
+
+    #Point values
+    for i in 0:1, j in 0:1, k in 0:1
+        aindex::Int64 = i + 2*j + 4*k +1
+        result[aindex,to1d(i,j,k)+1] = 8
+    end
+
+
+    #Specify first derivatives
+    for i in 0:1, j in 0:1, k in 0:1
+        for ddirection in 1:3
+            if ddirection == 1
+                ddirectionT::Tuple{Int64,Int64,Int64} = (1,0,0)
+            elseif ddirection == 2
+                ddirectionT = (0,1,0)
+            elseif ddirection == 3
+                ddirectionT = (0,0,1)
+            end
+            #res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
+            #res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
+            aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
+            result[aindex, to1d(
+                i + ddirectionT[1] + 1, j + ddirectionT[2] + 1, k + ddirectionT[3] + 1)+1
+                ] = 4
+            result[aindex,to1d(
+                i - ddirectionT[1] + 1, j - ddirectionT[2] + 1, k + ddirectionT[3] + 1)+1
+            ] = -4
+        end
+    end
+
+    for i in 0:1, j in 0:1, k in 0:1
+        for ddirection1 in 1:2
+            if ddirection1 == 1
+                ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
+            else
+                ddirection1T = (0,1,0)
+            end
+            for ddirection2 in (ddirection1+1):3
+                if ddirection2 == 2
+                    ddirection2T::Tuple{Int64,Int64,Int64} = (0,1,0)
+                else
+                    ddirection2T = (0,0,1)
+                end
+
+                    aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
+                    result[aindex,to1d(i + ddirection1T[1] + ddirection2T[1] + 1,
+                             j + ddirection1T[2] + ddirection2T[2] + 1,
+                             k + ddirection1T[3] + ddirection2T[3] + 1
+                             ) + 1 ] = 2
+
+                    result[aindex,to1d(i + ddirection1T[1] - ddirection2T[1] + 1,
+                            j + ddirection1T[2] - ddirection2T[2] + 1,
+                            k + ddirection1T[3] - ddirection2T[3] + 1
+                            ) + 1] = 2
+
+                    result[aindex,to1d(i - ddirection1T[1] + ddirection2T[1] + 1,
+                            j - ddirection1T[2] + ddirection2T[2] + 1,
+                            k - ddirection1T[3] + ddirection2T[3] + 1
+                            ) + 1] = -2
+
+                    result[aindex,to1d(i - ddirection1T[1] - ddirection2T[1] + 1,
+                            j - ddirection1T[2] - ddirection2T[2] + 1,
+                            k - ddirection1T[3] - ddirection2T[3] + 1
+                            ) + 1] = 2
+            end
+        end
+    end
+    #Specfiy (mixed) third derivatives
+    for i in 0:1, j in 0:1, k in 0:1
+        aindex = i + 2*j + 4*k + 56 + 1
+
+        res = 0.0
+        result[aindex,to1d(i+1+1,j+1+1,k+1+1) + 1] = 1
+        result[aindex,to1d(i+1+1,j+1+1,k-1+1) + 1] = -1
+        result[aindex,to1d(i+1+1,j-1+1,k+1+1) + 1] = -1
+        result[aindex,to1d(i+1+1,j-1+1,k-1+1) + 1] = 1
+        result[aindex,to1d(i-1+1,j+1+1,k+1+1) + 1] = -1
+        result[aindex,to1d(i-1+1,j+1+1,k-1+1) + 1] = 1
+        result[aindex,to1d(i-1+1,j-1+1,k+1+1) + 1] = 1
+        result[aindex,to1d(i-1+1,j-1+1,k-1+1) + 1] = -1
+    end
+    return result
+end
+
+F = build_full_finite_difference_matrix()
+
+
+
 #Just divrem, but casts the first result to Int
 @inline function gooddivrem(x::T,y::Int64)::Tuple{Int64,T} where T
-    a,b = divrem(x,y)
+    a,b = divrem(x,T(y))
     return Base.unsafe_trunc(Int,a), b
 end
 
@@ -26,9 +120,8 @@ end
 function fast_trilinear_earth_interpolate_internal(
         u::SArray{Tuple{2},T,1,2},p,tin::Float64,Us::U,Vs::V
         )::SArray{Tuple{2},T,1,2} where {T<:Real,U,V}
-    nx::Int64 = size(Us)[1]
-    ny::Int64 = size(Us)[2]
-    nt::Int64 = size(Us)[3]
+
+    nx::Int64, ny::Int64, nt::Int64 = size(Us)
     #Get the spatial bounds from p
     ll1::Float64,ur1::Float64  = p[3]
     ll2::Float64,ur2::Float64 = p[4]
@@ -53,7 +146,8 @@ function fast_trilinear_earth_interpolate_internal(
     end
 
     #Actual interpolation for u
-    #TODO: Rewrite this with the earthIndex function (see below)
+    #TODO: Maybe rewrite this with the earthIndex function (see below)
+    @inbounds begin
     r1u::T =  Us[xindex+1,yindex + 1,tindex ]*(1 - xcoord) +
                     Us[ (xindex + 1) % nx + 1,yindex + 1, tindex ]*xcoord
     r2u::T =  Us[xindex+1,(yindex + 1) % ny + 1,tindex ]*(1 - xcoord) +
@@ -78,6 +172,7 @@ function fast_trilinear_earth_interpolate_internal(
     res2::T =  (
         (1-tcoord)*((1-ycoord)*r1v + ycoord*r2v)
          + tcoord*((1-ycoord)*r3v + ycoord*r4v))
+    end
     return SArray{Tuple{2},T,1,2}((res1,res2))
 end
 
@@ -97,11 +192,19 @@ end
     tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
     result::T = zero(T)
 
+    function earthIndexRaw(i,j,k)
+        i_new = mod(xindex + i,nx)
+        j_new = mod(yindex + j,ny)
+        k_new =  max(min(tindex + k, nt-1 ),0)
+        return i_new + j_new * nx + k_new*nx*ny + 1
+    end
+
+    uvals = @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
+
 
     #Specify point values
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
-        current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex + j,tindex + k)
-        res::T = Us[earthIndex(current_index,nx,ny,nt)]
+    @inbounds for i in 0:1, j in 0:1, k in 0:1
+        res::T = uvals[i+2,j+2,k+2]
         aindex::Int64 = i + 2*j + 4*k +1
         tmpresult::T = zero(T)
         @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
@@ -113,9 +216,8 @@ end
         end
         result += res*tmpresult
     end
-
     #Specify first derivatives
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
+    @inbounds for i in 0:1, j in 0:1, k in 0:1
         for ddirection in 1:3
             if ddirection == 1
                 ddirectionT::Tuple{Int64,Int64,Int64} = (1,0,0)
@@ -124,10 +226,11 @@ end
             elseif ddirection == 3
                 ddirectionT = (0,0,1)
             end
-            current_index = (xindex + i,yindex+ j,tindex + k)
             res::T = 0.0
-            res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
-            res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
+            #res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
+            #res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
+            res += uvals[i + ddirectionT[1] + 2, j + ddirectionT[2] + 2, k + ddirectionT[3] + 2]
+            res -= uvals[i - ddirectionT[1] + 2, j - ddirectionT[2] + 2, k + ddirectionT[3] + 2]
             res /= 2.0
             aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
 
@@ -146,7 +249,7 @@ end
 
     #Specify (mixed) second derivatives
 
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
+    @inbounds for i in 0:1, j in 0:1, k in 0:1
         for ddirection1 in 1:2
             if ddirection1 == 1
                 ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
@@ -161,10 +264,26 @@ end
                 end
                     current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex+j,tindex+k)
                     res = 0.0
-                    res += Us[earthIndex(current_index .+ ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    res -= Us[earthIndex(current_index .+ ddirection1T .- ddirection2T,nx,ny,nt)]
-                    res -= Us[earthIndex(current_index .- ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    res += Us[earthIndex(current_index .- ddirection1T .- ddirection2T,nx,ny,nt)]
+                    res += uvals[ i + ddirection1T[1] + ddirection2T[1] + 2,
+                             j + ddirection1T[2] + ddirection2T[2] + 2,
+                             k + ddirection1T[3] + ddirection2T[3] + 2]
+
+                    res -= uvals[i + ddirection1T[1] - ddirection2T[1] + 2,
+                            j + ddirection1T[2] - ddirection2T[2] + 2,
+                            k + ddirection1T[3] - ddirection2T[3] + 2]
+
+                    res -= uvals[i - ddirection1T[1] + ddirection2T[1] + 2,
+                            j - ddirection1T[2] + ddirection2T[2] + 2,
+                            k - ddirection1T[3] + ddirection2T[3] + 2]
+
+                    res += uvals[i - ddirection1T[1] - ddirection2T[1] + 2,
+                            j - ddirection1T[2] - ddirection2T[2] + 2,
+                            k - ddirection1T[3] - ddirection2T[3] + 2]
+
+                    #res += Us[earthIndex(current_index .+ ddirection1T .+ ddirection2T,nx,ny,nt)]
+                    #res -= Us[earthIndex(current_index .+ ddirection1T .- ddirection2T,nx,ny,nt)]
+                    #res -= Us[earthIndex(current_index .- ddirection1T .+ ddirection2T,nx,ny,nt)]
+                    #res += Us[earthIndex(current_index .- ddirection1T .- ddirection2T,nx,ny,nt)]
                     res /= 4.0
                     aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
 
@@ -182,17 +301,26 @@ end
         end
     end
     #Specfiy (mixed) third derivatives
-    @inbounds for j in 0:1, k in 0:1, i in 0:1
+    @inbounds for i in 0:1, j in 0:1, k in 0:1
         current_index = (xindex+i,yindex+j,tindex+k)
         res = 0.0
-        res += Us[earthIndex(current_index .+ (1,1,1) ,nx,ny,nt)]
-        res -= Us[earthIndex(current_index .+ (1,1,-1) ,ny,ny,nt)]
-        res -= Us[earthIndex(current_index .+ (1,-1,1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (1,-1,-1),nx,ny,nt )]
-        res -= Us[earthIndex(current_index .+ (-1,1,1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (-1,1,-1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (-1,-1,1),nx,ny,nt )]
-        res -= Us[earthIndex(current_index .+ (-1,-1,-1),nx,ny,nt )]
+        res += uvals[i+1+2,j+1+2,k+1+2]#
+        res -= uvals[i+1+2,j+1+2,k-1+2]#
+        res -= uvals[i+1+2,j-1+2,k+1+2]#
+        res += uvals[i+1+2,j-1+2,k-1+2]#
+        res -= uvals[i-1+2,j+1+2,k+1+2]#
+        res += uvals[i-1+2,j+1+2,k-1+2]#
+        res += uvals[i-1+2,j-1+2,k+1+2]#
+        res -= uvals[i-1+2,j-1+2,k-1+2]#
+
+        #res += Us[earthIndex(current_index .+ (1,1,1) ,nx,ny,nt)]
+        #res -= Us[earthIndex(current_index .+ (1,1,-1) ,ny,ny,nt)]
+        #res -= Us[earthIndex(current_index .+ (1,-1,1),nx,ny,nt )]
+        #res += Us[earthIndex(current_index .+ (1,-1,-1),nx,ny,nt )]
+        #res -= Us[earthIndex(current_index .+ (-1,1,1),nx,ny,nt )]
+        #res += Us[earthIndex(current_index .+ (-1,1,-1),nx,ny,nt )]
+        #res += Us[earthIndex(current_index .+ (-1,-1,1),nx,ny,nt )]
+        #res -= Us[earthIndex(current_index .+ (-1,-1,-1),nx,ny,nt )]
         res /= 8.0
         aindex = i + 2*j + 4*k + 56 + 1
 
