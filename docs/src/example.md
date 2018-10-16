@@ -21,7 +21,7 @@ LL = [147.0,15.0]
 UR = [180.0,48.0]
 
 CoherentStructures.plot_ftle(
-       fast_trilinear_earth_interpolate,p,
+       uv_trilinear,p,
        [times[1],times[end]],
        LL,UR,500,500;
        tolerance=1e-6,

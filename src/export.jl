@@ -1,8 +1,9 @@
 export
-   fast_trilinear_earth_interpolate,
-   fast_tricubic_earth_interpolate,
-   fast_tricubic_earth_interpolate_gradient,
-   fast_tricubic_earth_interpolate_eqvari,
+   uv_trilinear,
+   uv_tricubic,
+   ssh_tricubic,
+   ssh_tricubic_gradient,
+   uv_tricubic_eqvari,
    sshVelocityRHS,
    read_ocean_velocities,
    read_ssh,

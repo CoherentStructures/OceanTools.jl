@@ -2,19 +2,55 @@
 #Constants needed for tricubic interpolation
 include("coeff.jl")
 
+function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where TA
+    n,m = size(A)
+
+    coeff_initializers = Expr(:block, [:($(Symbol("y",i)) = zero(T)) for i in 1:n]...)
+    coeff_updates = Expr(:block)
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for col in 1:m
+        for j in nzrange(A,col)
+            row = rows[j]
+            val = vals[j]
+            push!(coeff_updates.args, :($(Symbol("y",row)) += $val *$x[$col]))
+        end
+    end
+    return quote
+        @inbounds begin
+            T = promote_type($TA, eltype($x))
+            $coeff_initializers
+            $coeff_updates
+            $(:(return SVector(tuple($([Symbol("y",i) for i in 1:n]...)))))
+        end
+    end
+end
+
+@generated function A_times_svec(x::SArray{m}) where m
+    sparse_by_svec(getA(),:x)
+end
+
+@generated function F_times_svec(x::SArray{m}) where m
+    sparse_by_svec(build_full_finite_difference_matrix(),:x)
+end
+
+@generated function AF_times_svec(x::SArray{m}) where m
+    tobuild = getA()*build_full_finite_difference_matrix()
+    sparse_by_svec(tobuild,:x)
+end
+
 
 function build_full_finite_difference_matrix()
-    result = spzeros(Int8,64,64)
+    result = spzeros(Int64,64,64)
     function to1d(i,j,k)
-        return i + j*4 + k*4*4
+        return (i+1) + 4*(j+1) + 16*(k+1) + 1
     end
 
     #Point values
     for i in 0:1, j in 0:1, k in 0:1
         aindex::Int64 = i + 2*j + 4*k +1
-        result[aindex,to1d(i,j,k)+1] = 8
+        result[aindex,to1d(i,j,k)] = 8
     end
-
 
     #Specify first derivatives
     for i in 0:1, j in 0:1, k in 0:1
@@ -29,12 +65,8 @@ function build_full_finite_difference_matrix()
             #res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
             #res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
             aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
-            result[aindex, to1d(
-                i + ddirectionT[1] + 1, j + ddirectionT[2] + 1, k + ddirectionT[3] + 1)+1
-                ] = 4
-            result[aindex,to1d(
-                i - ddirectionT[1] + 1, j - ddirectionT[2] + 1, k + ddirectionT[3] + 1)+1
-            ] = -4
+            result[aindex, to1d(i + ddirectionT[1], j + ddirectionT[2], k+ddirectionT[3])] = 4
+            result[aindex, to1d(i - ddirectionT[1], j - ddirectionT[2], k-ddirectionT[3])] = -4
         end
     end
 
@@ -53,25 +85,29 @@ function build_full_finite_difference_matrix()
                 end
 
                     aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
-                    result[aindex,to1d(i + ddirection1T[1] + ddirection2T[1] + 1,
-                             j + ddirection1T[2] + ddirection2T[2] + 1,
-                             k + ddirection1T[3] + ddirection2T[3] + 1
-                             ) + 1 ] = 2
+                    result[aindex,to1d(
+                             i + ddirection1T[1] + ddirection2T[1],
+                             j + ddirection1T[2] + ddirection2T[2],
+                             k + ddirection1T[3] + ddirection2T[3]
+                             )] = 2
 
-                    result[aindex,to1d(i + ddirection1T[1] - ddirection2T[1] + 1,
-                            j + ddirection1T[2] - ddirection2T[2] + 1,
-                            k + ddirection1T[3] - ddirection2T[3] + 1
-                            ) + 1] = 2
+                    result[aindex,to1d(
+                            i + ddirection1T[1] - ddirection2T[1],
+                            j + ddirection1T[2] - ddirection2T[2],
+                            k + ddirection1T[3] - ddirection2T[3]
+                            )] = -2
 
-                    result[aindex,to1d(i - ddirection1T[1] + ddirection2T[1] + 1,
-                            j - ddirection1T[2] + ddirection2T[2] + 1,
-                            k - ddirection1T[3] + ddirection2T[3] + 1
-                            ) + 1] = -2
+                    result[aindex,to1d(
+                            i - ddirection1T[1] + ddirection2T[1],
+                            j - ddirection1T[2] + ddirection2T[2],
+                            k - ddirection1T[3] + ddirection2T[3]
+                            )] = -2
 
-                    result[aindex,to1d(i - ddirection1T[1] - ddirection2T[1] + 1,
-                            j - ddirection1T[2] - ddirection2T[2] + 1,
-                            k - ddirection1T[3] - ddirection2T[3] + 1
-                            ) + 1] = 2
+                    result[aindex,to1d(
+                            i - ddirection1T[1] - ddirection2T[1],
+                            j - ddirection1T[2] - ddirection2T[2],
+                            k - ddirection1T[3] - ddirection2T[3]
+                            )] = 2
             end
         end
     end
@@ -80,19 +116,22 @@ function build_full_finite_difference_matrix()
         aindex = i + 2*j + 4*k + 56 + 1
 
         res = 0.0
-        result[aindex,to1d(i+1+1,j+1+1,k+1+1) + 1] = 1
-        result[aindex,to1d(i+1+1,j+1+1,k-1+1) + 1] = -1
-        result[aindex,to1d(i+1+1,j-1+1,k+1+1) + 1] = -1
-        result[aindex,to1d(i+1+1,j-1+1,k-1+1) + 1] = 1
-        result[aindex,to1d(i-1+1,j+1+1,k+1+1) + 1] = -1
-        result[aindex,to1d(i-1+1,j+1+1,k-1+1) + 1] = 1
-        result[aindex,to1d(i-1+1,j-1+1,k+1+1) + 1] = 1
-        result[aindex,to1d(i-1+1,j-1+1,k-1+1) + 1] = -1
+        result[aindex,to1d(i+1,j+1,k+1)] = 1
+        result[aindex,to1d(i+1,j+1,k-1)] = -1
+        result[aindex,to1d(i+1,j-1,k+1)] = -1
+        result[aindex,to1d(i+1,j-1,k-1)] = 1
+        result[aindex,to1d(i-1,j+1,k+1)] = -1
+        result[aindex,to1d(i-1,j+1,k-1)] = 1
+        result[aindex,to1d(i-1,j-1,k+1)] = 1
+        result[aindex,to1d(i-1,j-1,k-1)] = -1
     end
     return result
 end
 
-F = build_full_finite_difference_matrix()
+const A = getA()
+const FT = permutedims(build_full_finite_difference_matrix())
+const F = build_full_finite_difference_matrix()
+const AF = A*build_full_finite_difference_matrix()
 
 
 
@@ -109,15 +148,22 @@ function gooddivrem(x::ForwardDiff.Dual, y)
 end
 =#
 
-function fast_trilinear_earth_interpolate(
+"""
+    uv_trilinear(u,p,tin)
+
+Trilinear interpolation of velocity field at `u` at time `tin`.
+Velocity field stored in `p` as returned by `getP`
+Periodic boundary in x and y, constant in t direction
+"""
+function uv_trilinear(
         u::SArray{Tuple{2},T,1,2},p,tin::Float64
         )::SArray{Tuple{2},T,1,2} where {T<:Real}
     Us = p[1]
     Vs = p[2]
-    return fast_trilinear_earth_interpolate_internal(u,p,tin,Us,Vs)
+    return uv_trilinear_internal(u,p,tin,Us,Vs)
 end
 
-function fast_trilinear_earth_interpolate_internal(
+function uv_trilinear_internal(
         u::SArray{Tuple{2},T,1,2},p,tin::Float64,Us::U,Vs::V
         )::SArray{Tuple{2},T,1,2} where {T<:Real,U,V}
 
@@ -182,7 +228,7 @@ end
 end
 
 #Some basic tricubic interpolation
-@inbounds @inline function base_tricubic_interpolation(
+@inline function base_tricubic_interpolation(
         xindex::Int64,yindex::Int64,tindex::Int64,
         nx::Int64,ny::Int64,nt::Int64,Us::U,
         x::T, y::T, t::T,
@@ -190,152 +236,21 @@ end
     xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
     yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
     tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
-    result::T = zero(T)
 
-    function earthIndexRaw(i,j,k)
-        i_new = mod(xindex + i,nx)
-        j_new = mod(yindex + j,ny)
-        k_new =  max(min(tindex + k, nt-1 ),0)
+    function earthIndexRaw(i::Int64,j::Int64,k::Int64)::Int64
+        i_new::Int64 = mod(xindex + i,nx)
+        j_new::Int64 = mod(yindex + j,ny)
+        k_new::Int64 =  max(min(tindex + k, nt-1 ),0)
         return i_new + j_new * nx + k_new*nx*ny + 1
     end
 
-    uvals = @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
-
-
-    #Specify point values
-    @inbounds for i in 0:1, j in 0:1, k in 0:1
-        res::T = uvals[i+2,j+2,k+2]
-        aindex::Int64 = i + 2*j + 4*k +1
-        tmpresult::T = zero(T)
-        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-            rowIndex::Int64 = A.rowval[r] - 1
-            xValIndex::Int64 = rowIndex % 4
-            yValIndex::Int64 = (div( (rowIndex - xValIndex),4)) % 4
-            tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-        end
-        result += res*tmpresult
+    uvals = @inbounds @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
+    res::T = zero(T)
+    @inbounds AFbyu = A_times_svec(F_times_svec(uvals))
+    @inbounds for i in 1:4,j in 1:4, k in 1:4
+            res += xp[i]*yp[j]*tp[k]*AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
     end
-    #Specify first derivatives
-    @inbounds for i in 0:1, j in 0:1, k in 0:1
-        for ddirection in 1:3
-            if ddirection == 1
-                ddirectionT::Tuple{Int64,Int64,Int64} = (1,0,0)
-            elseif ddirection == 2
-                ddirectionT = (0,1,0)
-            elseif ddirection == 3
-                ddirectionT = (0,0,1)
-            end
-            res::T = 0.0
-            #res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
-            #res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
-            res += uvals[i + ddirectionT[1] + 2, j + ddirectionT[2] + 2, k + ddirectionT[3] + 2]
-            res -= uvals[i - ddirectionT[1] + 2, j - ddirectionT[2] + 2, k + ddirectionT[3] + 2]
-            res /= 2.0
-            aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
-
-            tmpresult::T = zero(T)
-
-            @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-                rowIndex::Int64 = A.rowval[r] - 1
-                xValIndex::Int64 = rowIndex % 4
-                yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-                tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            end
-            result += tmpresult*res
-        end
-    end
-
-    #Specify (mixed) second derivatives
-
-    @inbounds for i in 0:1, j in 0:1, k in 0:1
-        for ddirection1 in 1:2
-            if ddirection1 == 1
-                ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
-            else
-                ddirection1T = (0,1,0)
-            end
-            for ddirection2 in (ddirection1+1):3
-                if ddirection2 == 2
-                    ddirection2T::Tuple{Int64,Int64,Int64} = (0,1,0)
-                else
-                    ddirection2T = (0,0,1)
-                end
-                    current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex+j,tindex+k)
-                    res = 0.0
-                    res += uvals[ i + ddirection1T[1] + ddirection2T[1] + 2,
-                             j + ddirection1T[2] + ddirection2T[2] + 2,
-                             k + ddirection1T[3] + ddirection2T[3] + 2]
-
-                    res -= uvals[i + ddirection1T[1] - ddirection2T[1] + 2,
-                            j + ddirection1T[2] - ddirection2T[2] + 2,
-                            k + ddirection1T[3] - ddirection2T[3] + 2]
-
-                    res -= uvals[i - ddirection1T[1] + ddirection2T[1] + 2,
-                            j - ddirection1T[2] + ddirection2T[2] + 2,
-                            k - ddirection1T[3] + ddirection2T[3] + 2]
-
-                    res += uvals[i - ddirection1T[1] - ddirection2T[1] + 2,
-                            j - ddirection1T[2] - ddirection2T[2] + 2,
-                            k - ddirection1T[3] - ddirection2T[3] + 2]
-
-                    #res += Us[earthIndex(current_index .+ ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    #res -= Us[earthIndex(current_index .+ ddirection1T .- ddirection2T,nx,ny,nt)]
-                    #res -= Us[earthIndex(current_index .- ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    #res += Us[earthIndex(current_index .- ddirection1T .- ddirection2T,nx,ny,nt)]
-                    res /= 4.0
-                    aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
-
-                    tmpresult = zero(T)
-
-                    @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-                        rowIndex::Int64 = A.rowval[r] - 1
-                        xValIndex::Int64 = rowIndex % 4
-                        yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-                        tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                        tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                    end
-                    result += res*tmpresult
-            end
-        end
-    end
-    #Specfiy (mixed) third derivatives
-    @inbounds for i in 0:1, j in 0:1, k in 0:1
-        current_index = (xindex+i,yindex+j,tindex+k)
-        res = 0.0
-        res += uvals[i+1+2,j+1+2,k+1+2]#
-        res -= uvals[i+1+2,j+1+2,k-1+2]#
-        res -= uvals[i+1+2,j-1+2,k+1+2]#
-        res += uvals[i+1+2,j-1+2,k-1+2]#
-        res -= uvals[i-1+2,j+1+2,k+1+2]#
-        res += uvals[i-1+2,j+1+2,k-1+2]#
-        res += uvals[i-1+2,j-1+2,k+1+2]#
-        res -= uvals[i-1+2,j-1+2,k-1+2]#
-
-        #res += Us[earthIndex(current_index .+ (1,1,1) ,nx,ny,nt)]
-        #res -= Us[earthIndex(current_index .+ (1,1,-1) ,ny,ny,nt)]
-        #res -= Us[earthIndex(current_index .+ (1,-1,1),nx,ny,nt )]
-        #res += Us[earthIndex(current_index .+ (1,-1,-1),nx,ny,nt )]
-        #res -= Us[earthIndex(current_index .+ (-1,1,1),nx,ny,nt )]
-        #res += Us[earthIndex(current_index .+ (-1,1,-1),nx,ny,nt )]
-        #res += Us[earthIndex(current_index .+ (-1,-1,1),nx,ny,nt )]
-        #res -= Us[earthIndex(current_index .+ (-1,-1,-1),nx,ny,nt )]
-        res /= 8.0
-        aindex = i + 2*j + 4*k + 56 + 1
-
-        tmpresult = zero(T)
-
-        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-            rowIndex = A.rowval[r] - 1
-            xValIndex::Int64 = rowIndex % 4
-            yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-            tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            tmpresult += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-        end
-        result += res*tmpresult
-    end
-    return result
+    return res/8.0
 end
 
 @inbounds @inline function base_tricubic_interpolation_gradient(
@@ -352,158 +267,45 @@ end
     result2::T = zero(T)
     result3::T = zero(T)
 
-    #Specify point values
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
-        current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex + j,tindex + k)
-        res::T = Us[earthIndex(current_index,nx,ny,nt)]
-        aindex::Int64 = i + 2*j + 4*k +1
-        tmpresult1::T = zero(T)
-        tmpresult2::T = zero(T)
-        tmpresult3::T = zero(T)
-        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-            rowIndex::Int64 = A.rowval[r] - 1
-            xValIndex::Int64 = rowIndex % 4
-            yValIndex::Int64 = (div( (rowIndex - xValIndex),4)) % 4
-            tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-            tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
-            tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-        end
-        result1 += res*tmpresult1
-        result2 += res*tmpresult2
-        result3 += res*tmpresult3
+
+    function earthIndexRaw(i::Int64,j::Int64,k::Int64)::Int64
+        i_new::Int64 = mod(xindex + i,nx)
+        j_new::Int64 = mod(yindex + j,ny)
+        k_new::Int64 =  max(min(tindex + k, nt-1 ),0)
+        return i_new + j_new * nx + k_new*nx*ny + 1
     end
 
-    #Specify first derivatives
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
-        for ddirection in 1:3
-            if ddirection == 1
-                ddirectionT::Tuple{Int64,Int64,Int64} = (1,0,0)
-            elseif ddirection == 2
-                ddirectionT = (0,1,0)
-            elseif ddirection == 3
-                ddirectionT = (0,0,1)
-            end
-            current_index = (xindex + i,yindex+ j,tindex + k)
-            res::T = 0.0
-            res += Us[earthIndex(current_index .+ ddirectionT,nx,ny,nt)]
-            res -= Us[earthIndex(current_index .- ddirectionT,nx,ny,nt)]
-            res /= 2.0
-            aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
+    uvals = @inbounds @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
 
-            tmpresult1::T = zero(T)
-            tmpresult2::T = zero(T)
-            tmpresult3::T = zero(T)
-
-            @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-                rowIndex::Int64 = A.rowval[r] - 1
-                xValIndex::Int64 = rowIndex % 4
-                yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-                tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-                tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
-                tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            end
-
-            result1 += res*tmpresult1
-            result2 += res*tmpresult2
-            result3 += res*tmpresult3
-        end
+    @inbounds AFbyu = A_times_svec(F_times_svec(uvals))
+    @inbounds for i in 1:4,j in 1:4, k in 1:4
+            curx = xp[i]
+            curdx = dxp[i]
+            cury = yp[j]
+            curdy = dyp[j]
+            curt = tp[k]
+            aval = AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
+            result1 += curdx*cury*curt*aval
+            result2 += curx*curdy*curt*aval
+            result3 += curx*cury*curt*aval
     end
-
-
-    #Specify (mixed) second derivatives
-
-    @inbounds for k in 0:1, j in 0:1, i in 0:1
-        @simd for ddirection1 in 1:2
-            if ddirection1 == 1
-                ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
-            else
-                ddirection1T = (0,1,0)
-            end
-            for ddirection2 in (ddirection1+1):3
-                if ddirection2 == 2
-                    ddirection2T::Tuple{Int64,Int64,Int64} = (0,1,0)
-                else
-                    ddirection2T = (0,0,1)
-                end
-                    current_index::Tuple{Int64,Int64,Int64} = (xindex + i,yindex+j,tindex+k)
-                    res = 0.0
-                    res += Us[earthIndex(current_index .+ ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    res -= Us[earthIndex(current_index .+ ddirection1T .- ddirection2T,nx,ny,nt)]
-                    res -= Us[earthIndex(current_index .- ddirection1T .+ ddirection2T,nx,ny,nt)]
-                    res += Us[earthIndex(current_index .- ddirection1T .- ddirection2T,nx,ny,nt)]
-                    res /= 4.0
-                    aindex = i + 2*j + 4*k + (2*(ddirection1-1) + (ddirection2 - ddirection1 - 1) + 4)*8 + 1
-
-                    tmpresult1::T = zero(T)
-                    tmpresult2::T = zero(T)
-                    tmpresult3::T = zero(T)
-
-                    @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-                        rowIndex::Int64 = A.rowval[r] - 1
-                        xValIndex::Int64 = rowIndex % 4
-                        yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-                        tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-
-                        tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                        tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
-                        tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-                    end
-
-                    result1 += res*tmpresult1
-                    result2 += res*tmpresult2
-                    result3 += res*tmpresult3
-            end
-        end
-    end
-    #Specfiy (mixed) third derivatives
-    @inbounds for j in 0:1, k in 0:1, i in 0:1
-        current_index = (xindex+i,yindex+j,tindex+k)
-        res = 0.0
-        res += Us[earthIndex(current_index .+ (1,1,1) ,nx,ny,nt)]
-        res -= Us[earthIndex(current_index .+ (1,1,-1) ,ny,ny,nt)]
-        res -= Us[earthIndex(current_index .+ (1,-1,1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (1,-1,-1),nx,ny,nt )]
-        res -= Us[earthIndex(current_index .+ (-1,1,1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (-1,1,-1),nx,ny,nt )]
-        res += Us[earthIndex(current_index .+ (-1,-1,1),nx,ny,nt )]
-        res -= Us[earthIndex(current_index .+ (-1,-1,-1),nx,ny,nt )]
-        res /= 8.0
-        aindex = i + 2*j + 4*k + 56 + 1
-
-        tmpresult1::T = zero(T)
-        tmpresult2::T = zero(T)
-        tmpresult3::T = zero(T)
-
-        @simd for r in  A.colptr[aindex]:(A.colptr[aindex + 1] - 1)
-            rowIndex = A.rowval[r] - 1
-            xValIndex::Int64 = rowIndex % 4
-            yValIndex::Int64 = ( div((rowIndex - xValIndex),4)) % 4
-            tValIndex::Int64 = div(( div((rowIndex - xValIndex),4) - yValIndex) , 4)
-
-            tmpresult1 += A.nzval[r]*dxp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-            tmpresult2 += A.nzval[r]*xp[xValIndex + 1]*dyp[yValIndex + 1]*tp[tValIndex + 1]
-            tmpresult3 += A.nzval[r]*xp[xValIndex + 1]*yp[yValIndex + 1]*tp[tValIndex + 1]
-        end
-
-        result1 += res*tmpresult1
-        result2 += res*tmpresult2
-        result3 += res*tmpresult3
-
-    end
-    return SVector{3,T}((result1,result2,result3))
+    return SVector{3,T}((result1/8.0,result2/8.0,result3/8.0))
 end
 
-#Function barrier version
-function fast_tricubic_earth_interpolate(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
+"""
+    uv_tricubic(x,p,tin)
+Tricubic interpolation of velocity field at `u` at time `tin`.
+Velocity field stored in `p` as returned by `getP`
+Periodic boundary in x and y, constant in t direction
+"""
+function uv_tricubic(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
     Us = p[1]
     Vs = p[2]
-    return fast_tricubic_earth_interpolate_internal(u,Us,Vs,p,tin)
+    return uv_tricubic_internal(u,Us,Vs,p,tin)
 end
 
 #Actual interpolation version
-function fast_tricubic_earth_interpolate_internal(u::StaticVector{2,T},Us::S,Vs::U,p,tin::Float64) where {T<:Real,S,U}
+function uv_tricubic_internal(u::StaticVector{2,T},Us::S,Vs::U,p,tin::Float64) where {T<:Real,S,U}
     nx::Int64 = size(Us)[1]
     ny::Int64 = size(Us)[2]
     nt::Int64 = size(Us)[3]
@@ -529,13 +331,52 @@ function fast_tricubic_earth_interpolate_internal(u::StaticVector{2,T},Us::S,Vs:
 end
 
 
-function fast_tricubic_earth_interpolate_gradient(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
+
+"""
+    ssh_tricubic(x,p,tin)
+Tricubic interpolation of scalar field field at `u` at time `tin`.
+Scalar field stored in `p` as returned by `getP`
+Periodic boundary in x and y, constant in t direction
+"""
+function ssh_tricubic(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
     sshs = p[7]
-    return fast_tricubic_earth_interpolate_gradient_internal(u,sshs,p,tin)
+    return ssh_tricubic_internal(u,sshs,p,tin)
 end
 
 
-function fast_tricubic_earth_interpolate_gradient_internal(u::StaticVector{2,T},sshs::S,p,tin::Float64) where {T<:Real,S,U}
+function ssh_tricubic_internal(u::StaticVector{2,T},sshs::S,p,tin::Float64) where {T<:Real,S}
+    nx::Int64 = size(sshs)[1]
+    ny::Int64 = size(sshs)[2]
+    nt::Int64 = size(sshs)[3]
+    #Get the spatial bounds from p
+    ll1::Float64,ur1::Float64  = p[3]
+    ll2::Float64,ur2::Float64 = p[4]
+    t0::Float64,tf::Float64 = p[5]
+    t::Float64 = tin
+    if t > tf
+        t = tf
+    end
+    if t < t0
+        t = t0
+    end
+    xindex::Int64, xcoord::T = gooddivrem((mod((u[1] - ll1), 360)*nx)/360.0,1)
+    yindex::Int64, ycoord::T = gooddivrem((mod((u[2] - ll2), 180)*ny)/180.0,1)
+    tindex::Int64, tcoord::T = gooddivrem((nt-1)*(t-t0)/(tf-t0),1)
+
+    res1::T = base_tricubic_interpolation(xindex,yindex,tindex,nx,ny,nt,sshs, xcoord, ycoord,tcoord)
+
+    return res1
+end
+
+
+
+function ssh_tricubic_gradient(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
+    sshs = p[7]
+    return ssh_tricubic_gradient_internal(u,sshs,p,tin)
+end
+
+
+function ssh_tricubic_gradient_internal(u::StaticVector{2,T},sshs::S,p,tin::Float64) where {T<:Real,S,U}
     nx::Int64 = size(sshs)[1]
     ny::Int64 = size(sshs)[2]
     nt::Int64 = size(sshs)[3]
@@ -560,14 +401,14 @@ end
 
 
 #Function barrier version
-function fast_tricubic_earth_interpolate_eqvari(u::StaticMatrix{2,3,T},p,tin::Float64) where {T<:Real}
+function uv_tricubic_eqvari(u::StaticMatrix{2,3,T},p,tin::Float64) where {T<:Real}
     Us = p[1]
     Vs = p[2]
-    return fast_tricubic_earth_interpolate_eqvari_internal(u,Us,Vs,p,tin)
+    return uv_tricubic_eqvari_internal(u,Us,Vs,p,tin)
 end
 
 
-function fast_tricubic_earth_interpolate_eqvari_internal(
+function uv_tricubic_eqvari_internal(
     uIn::StaticMatrix{2,3,T}, Us::S,Vs::S,p,tin::Float64) where {T<:Real,S,U}
     u = @SVector [uIn[1,1], uIn[2,1]]
     nx::Int64 = size(Us)[1]
@@ -599,11 +440,11 @@ function interp_inbounds(x,y,p)
     return !isnan(p[3][x,y])
 end
 function inbounds_checker_bilinear(x,y,p)
-    return !isnan(fast_trilinear_earth_interpolate(SVector{2,Float64}((x,y)),p[6],p[6][5][1])[1])
+    return !isnan(uv_trilinear(SVector{2,Float64}((x,y)),p[6],p[6][5][1])[1])
 end
 
 function sshVelocityRHS(u,p,t)
-    du::SVector{2,Float64} = fast_tricubic_earth_interpolate_gradient(u,p,t)
+    du::SVector{2,Float64} = ssh_tricubic_gradient(u,p,t)
 
     g::Float64 = 9.807 #Gravitational constant (m/s^2)
     R::Float64 = 6371e3 #Radius of earth (m)
