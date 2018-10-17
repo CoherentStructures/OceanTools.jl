@@ -61,7 +61,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Example Usage",
     "title": "Example Usage",
     "category": "section",
-    "text": "using  Distributed, Tensors, StaticArrays, Statistics, Plots\naddprocs(4) #Use 4 processors\n\nimport CoherentStructures\nusing CopernicusUtils\n\n#Directory containing files like nrt_global_allsat_phy_l4_20170108_20170114.nc\nww_ocean_data = \"/media/public/schillna/ocean1/worldwide_ocean_data/\"\n\n#Read in data into p, missing values are set to zero\np,times = getP(ww_ocean_data, ndays=90, sshs=true,remove_nan=true)\n\n#Garbage collection on all processors\n@everywhere GC.gc()\n\n#Bounding corners of the box on which to plot\nLL = [147.0,15.0]\nUR = [180.0,48.0]\n\nCoherentStructures.plot_ftle(\n       fast_trilinear_earth_interpolate,p,\n       [times[1],times[end]],\n       LL,UR,500,500;\n       tolerance=1e-6,\n       aspect_ratio=1,\n       title=\"FTLE Field\"\n       )(Image: )"
+    "text": "using  Distributed, Tensors, StaticArrays, Statistics, Plots\naddprocs(4) #Use 4 processors\n\nimport CoherentStructures\nusing CopernicusUtils\n\n#Directory containing files like nrt_global_allsat_phy_l4_20170108_20170114.nc\nww_ocean_data = \"/media/public/schillna/ocean1/worldwide_ocean_data/\"\n\n#Read in data into p, missing values are set to zero\np,times = getP(ww_ocean_data, ndays=90, sshs=true,remove_nan=true)\n\n#Garbage collection on all processors\n@everywhere GC.gc()\n\n#Bounding corners of the box on which to plot\nLL = [147.0,15.0]\nUR = [180.0,48.0]\n\nCoherentStructures.plot_ftle(\n       uv_trilinear,p,\n       [times[1],times[end]],\n       LL,UR,500,500;\n       tolerance=1e-6,\n       aspect_ratio=1,\n       title=\"FTLE Field\"\n       )(Image: )"
 },
 
 ]}
