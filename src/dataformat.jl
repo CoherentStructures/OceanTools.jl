@@ -83,17 +83,6 @@ function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true)
     #Remove NaN values
 
     if remove_nan
-        #=
-        for j in 1:sLat
-            for i in 1:sLon
-            	if isnan(Ust1S[i,j])
-                		UsS[i,j,:] .= 0
-                		VsS[i,j,:] .= 0
-            	end
-            end
-        end
-        =#
-
         for t in 1:stimes
             for j in 1:sLat
             	for i in 1:sLon
@@ -166,21 +155,48 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true)
     return LonS,LatS,sshsS,timesS,sshst1S
 end
 
-function getP(foldername; ndays=90, sshs=true,remove_nan=true)
-    Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan)
+function getP(foldername; ndays=90, sshs=false,remove_nan=true)
     if sshs
-        Lon,Lat, sshs,times,sshsT1 = read_ssh(ndays,foldername,remove_nan)
+        Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan)
+        Us,Vs = nothing,nothing
     else
-        sshs  = nothing
+        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan)
+        ssh_vals  = nothing
     end
-
-    p = (
-        Us,Vs,
-        (Lon[1],Lon[end]),(Lat[1],Lat[end]), (times[1],times[end]),
-        ( Ust1,Ust1,(Lon[1],Lon[end]), (Lat[1],Lat[end]),(times[1],times[2])),
-        sshs
-         )
-    return p,times
+    nx = length(Lon)
+    ny = length(Lat)
+    nt = length(times)
+    if !sshs
+        res_full = ItpMetadata(nx,ny,nt,SVector{3}([0.0,-90.0,times[1]]), SVector{3}([360.,+90.0,times[end] + times[2] - times[1] ]),
+            (Us,Vs),0,0,1)
+        return res_full, Ust1, (Lon,Lat,times)
+    else
+        res_full = ItpMetadata(nx,ny,nt,SVector{3}([0.0,-90.0]), SVector{3}([360.,+90.0]),
+            ssh_vals,0,0,1)
+        return res_full,sshst1, (Lon,Lat,times)
+    end
 end
 
+function restrictP(full_data,UR,LL,tspan,flow,ntraj=20,safety_factor=0.2,sshs=false)
+    if !sshs
+        #Calculate UR_big, LL_big
+        xs = range(LL[1],stop=UR[1],length=ntraj)
+        ys = range(LL[1],stop=UR[1],length=ntraj)
+        grid = SVector{3}.(xs',ys)
+        images = map(x->flow(uv_trilinear, x, tspan; p=full_data), grid)
+        firstcoord = x->x[1]
 
+        centre = 0.5*(LL + UR)
+        toadd = maximum.(abs.(UR_image - centre,LL_image-centre))*safety_factor
+
+        LL_new = centre .- toadd
+        UR_new = centre .+ toadd
+
+        #Copy data to new SharedArray
+
+        #make new interpolation metadata
+
+    else
+        throw(AssertionError("Not yet implemented"))
+    end
+end
