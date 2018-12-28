@@ -6,19 +6,18 @@ function loadEarthMap(nat_earth_path)
     nLat = range(ULpixel[1], step=pixelSpacing, length=size(natearth)[2])
     return natearth, nLon,nLat
 end
-
 function getLonLat(filename)
     return NetCDF.ncread(filename,"longitude"), NetCDF.ncread(filename,"latitude")
 end
 
-function loadUV(filename)
-     U = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,"ugos")][:,:,1]
-     V = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,"vgos")][:,:,1]
+function loadField(filename,fieldname)
+     U = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,fieldname)][:,:,1]
      t = NetCDF.ncread(filename,"time")
-     return U,V,t[1]
+     return U,t[1]
 end
 
 function loadSSH(filename)
+	d = NCD.Dataset(filename)
      ssh = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,"adt")][:,:,1]
      t = NetCDF.ncread(filename,"time")
      return ssh,t[1]
@@ -46,7 +45,8 @@ function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true)
     	    break
     	end
     	fname = ww_ocean_data * "/" * fname_part
-    	U,V,t = loadUV(fname)
+    	U,t = loadField(fname,"ugos")
+    	V,_= loadField(fname,"vgos")
     	rescaleUV!!(U,V,Lon,Lat)
     	times[index] = t
     	Us[:,:,index] .= U
