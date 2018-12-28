@@ -7,20 +7,19 @@ function loadEarthMap(nat_earth_path)
     return natearth, nLon,nLat
 end
 function getLonLat(filename)
-    return NetCDF.ncread(filename,"longitude"), NetCDF.ncread(filename,"latitude")
+     d = NCD.Dataset(filename)
+     lon = NCDatasets.nomissing(d0[fieldname][:],NaN)[:]
+     lat = NCDatasets.nomissing(d0[fieldname][:],NaN)[:]
+     return lon,lat
 end
 
 function loadField(filename,fieldname)
-     U = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,fieldname)][:,:,1]
-     t = NetCDF.ncread(filename,"time")
-     return U,t[1]
-end
+     d = NCD.Dataset(filename)
 
-function loadSSH(filename)
-	d = NCD.Dataset(filename)
-     ssh = [x == -2147483647 ? NaN : x*0.0001 for x in NetCDF.ncread(filename,"adt")][:,:,1]
-     t = NetCDF.ncread(filename,"time")
-     return ssh,t[1]
+     NCDatasets.nomissing(d[fieldname][:],NaN)[:,:,1]
+
+     t = d["time"]
+     return U,t[1]
 end
 
 function rescaleUV!!(U,V,Lon,Lat)
@@ -108,7 +107,7 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true)
     	    break
     	end
     	fname = ww_ocean_data * "/" * fname_part
-    	ssh,t = loadSSH(fname)
+    	ssh,t = loadField(fname,"adt")
     	times[index] = t
     	sshs[:,:,index] .= ssh
     end
