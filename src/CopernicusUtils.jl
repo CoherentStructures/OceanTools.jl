@@ -4,6 +4,7 @@ module CopernicusUtils
 
     import Images
     import NCDatasets
+    import Dates
     const NCD = NCDatasets
 
     include("interpolation.jl")

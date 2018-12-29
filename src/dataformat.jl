@@ -8,18 +8,21 @@ function loadEarthMap(nat_earth_path)
 end
 function getLonLat(filename)
      d = NCD.Dataset(filename)
-     lon = NCDatasets.nomissing(d0[fieldname][:],NaN)[:]
-     lat = NCDatasets.nomissing(d0[fieldname][:],NaN)[:]
+     lon = NCDatasets.nomissing(d["longitude"][:],NaN)[:]
+     lat = NCDatasets.nomissing(d["latitude"][:],NaN)[:]
      return lon,lat
 end
 
 function loadField(filename,fieldname)
      d = NCD.Dataset(filename)
 
-     NCDatasets.nomissing(d[fieldname][:],NaN)[:,:,1]
+     U = NCDatasets.nomissing(d[fieldname][:],NaN)[:,:,1]
 
-     t = d["time"]
-     return U,t[1]
+     t = d["time"][1]
+     #TODO: deal with this better
+     tdays = round(t - Dates.DateTime(1950,1,1,0,0,0),Dates.Hour
+			                       ).value/24.0
+     return U,tdays
 end
 
 function rescaleUV!!(U,V,Lon,Lat)
