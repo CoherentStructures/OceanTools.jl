@@ -271,7 +271,21 @@ struct ItpMetadata{T}
     boundaryX::Int64
     boundaryY::Int64
     boundaryT::Int64
+
+    function ItpMetadata(nx::Int,ny::Int,nt::Int,
+                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
+                        data::T, boundaryX::Int64,
+                        boundaryY::Int64,boundaryT::Int64
+                        ) where T
+        @assert length(LL) == 3
+        @assert length(UR) == 3
+        new{T}(nx,ny,nt, (@SVector [LL[1],LL[2],LL[3]]),
+                        (@SVector [UR[1],UR[2],UR[3]]),
+                        data,boundaryX,boundaryY,boundaryT
+                        )
+    end
 end
+
 
 """
     uv_trilinear(u,p,tin)
