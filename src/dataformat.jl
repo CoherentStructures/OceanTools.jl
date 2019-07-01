@@ -13,6 +13,12 @@ function getLonLat(filename)
      return lon,lat
 end
 
+function getTime(filename)
+     d = NCD.Dataset(filename)
+     t = d["time"][1]
+     return t
+end
+
 function loadField(filename,fieldname)
      d = NCD.Dataset(filename)
 
@@ -37,22 +43,32 @@ function rescaleUV!!(U,V,Lon,Lat)
 	end
 end
 
-function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true)
+function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     Us = zeros(length(Lon),length(Lat),howmany)
     Vs = zeros(length(Lon),length(Lat),howmany)
-    for (index,fname_part) in enumerate(readdir(ww_ocean_data))
-    	if index > howmany
+    numfound = 0
+    for fname_part in readdir(ww_ocean_data)
+    	fname = ww_ocean_data * "/" * fname_part
+	if startdate !== nothing
+	    if getTime(fname) < startdate
+		continue
+	    end
+	end
+    	if numfound >= howmany
     	    break
     	end
-    	fname = ww_ocean_data * "/" * fname_part
+	numfound += 1
     	U,t = loadField(fname,"ugos")
     	V,_= loadField(fname,"vgos")
     	rescaleUV!!(U,V,Lon,Lat)
-    	times[index] = t
-    	Us[:,:,index] .= U
-    	Vs[:,:,index] .= V
+    	times[numfound] = t
+    	Us[:,:,numfound] .= U
+    	Vs[:,:,numfound] .= V
+    end
+    if numfound < howmany
+	@warn "Only read in $numfound velocities!!"
     end
 
     sLon = size(Lon)[1]
@@ -101,18 +117,30 @@ function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true)
     return LonS,LatS,UsS,VsS,timesS,Ust1S
 end
 
-function read_ssh(howmany,ww_ocean_data,remove_nan=true)
+function read_ssh(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     sshs = zeros(length(Lon),length(Lat),howmany)
-    for (index,fname_part) in enumerate(readdir(ww_ocean_data))
-    	if index > howmany
+    numfound = 0
+    for fname_part in readdir(ww_ocean_data)
+    	fname = ww_ocean_data * "/" * fname_part
+	if startdate !== nothing
+	    if getTime(fname) < startdate
+		continue
+	    end
+	end
+    	if numfound > howmany
     	    break
     	end
+	numfound += 1
     	fname = ww_ocean_data * "/" * fname_part
     	ssh,t = loadField(fname,"adt")
-    	times[index] = t
-    	sshs[:,:,index] .= ssh
+    	times[numfound] = t
+    	sshs[:,:,numfound] .= ssh
+    end
+
+    if numfound < howmany
+	@warn "Only read in $numfound sea surface heights!!"
     end
 
     sLon = size(Lon)[1]
@@ -157,12 +185,12 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true)
     return LonS,LatS,sshsS,timesS,sshst1S
 end
 
-function getP(foldername; ndays=90, sshs=false,remove_nan=true)
+function getP(foldername; ndays=90, sshs=false,remove_nan=true,start_date=nothing)
     if sshs
-        Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan)
+        Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan,start_date)
         Us,Vs = nothing,nothing
     else
-        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan)
+        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan,start_date)
         ssh_vals  = nothing
     end
     nx = length(Lon)
