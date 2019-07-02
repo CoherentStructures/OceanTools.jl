@@ -10,12 +10,14 @@ function getLonLat(filename)
      d = NCD.Dataset(filename)
      lon = NCDatasets.nomissing(d["longitude"][:],NaN)[:]
      lat = NCDatasets.nomissing(d["latitude"][:],NaN)[:]
+     close(d)
      return lon,lat
 end
 
 function getTime(filename)
      d = NCD.Dataset(filename)
      t = d["time"][1]
+     close(d)
      return t
 end
 
@@ -25,6 +27,7 @@ function loadField(filename,fieldname)
      U = NCDatasets.nomissing(d[fieldname][:],NaN)[:,:,1]
 
      t = d["time"][1]
+     close(d)
      #TODO: deal with this better
      tdays = round(t - Dates.DateTime(1950,1,1,0,0,0),Dates.Hour
 			                       ).value/24.0
@@ -43,19 +46,32 @@ function rescaleUV!!(U,V,Lon,Lat)
 	end
 end
 
-function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
+function read_ocean_velocities(
+                    howmany,
+                    ww_ocean_data,
+                    remove_nan=true,
+                    start_date=nothing,
+                    nskip=0,
+                    arraycons=SharedArray{Float64}
+                    )
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     Us = zeros(length(Lon),length(Lat),howmany)
     Vs = zeros(length(Lon),length(Lat),howmany)
     numfound = 0
+    skipped=0
     for fname_part in readdir(ww_ocean_data)
     	fname = ww_ocean_data * "/" * fname_part
-	if startdate !== nothing
-	    if getTime(fname) < startdate
-		continue
-	    end
-	end
+        if start_date !== nothing
+            if getTime(fname) < start_date
+            continue
+            end
+        end
+
+        if skipped < nskip
+            skipped += 1
+            continue
+        end
     	if numfound >= howmany
     	    break
     	end
@@ -75,17 +91,17 @@ function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true,startdate=n
     sLat = size(Lat)[1]
     stimes = size(times)[1]
 
-    LonS = SharedArray{Float64}(sLon)
-    LatS = SharedArray{Float64}(sLat)
-    timesS = SharedArray{Float64}(stimes)
+    LonS = arraycons(sLon)
+    LatS = arraycons(sLat)
+    timesS = arraycons(stimes)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    UsS = SharedArray{Float64}(sLon,sLat,stimes)
-    VsS = SharedArray{Float64}(sLon,sLat,stimes)
-    Ust1S = SharedArray{Float64}(sLon,sLat,1)
+    UsS = arraycons(sLon,sLat,stimes)
+    VsS = arraycons(sLon,sLat,stimes)
+    Ust1S = arraycons(sLon,sLat,1)
 
     UsS .= Us
     VsS .= Vs
@@ -117,18 +133,23 @@ function read_ocean_velocities(howmany,ww_ocean_data,remove_nan=true,startdate=n
     return LonS,LatS,UsS,VsS,timesS,Ust1S
 end
 
-function read_ssh(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
+function read_ssh(howmany,ww_ocean_data,remove_nan=true,start_date=nothing,nskip=0,arraycons=SharedArray{Float64})
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     sshs = zeros(length(Lon),length(Lat),howmany)
     numfound = 0
+    skipped = 0
     for fname_part in readdir(ww_ocean_data)
     	fname = ww_ocean_data * "/" * fname_part
-	if startdate !== nothing
-	    if getTime(fname) < startdate
-		continue
-	    end
-	end
+        if start_date !== nothing
+            if getTime(fname) < start_date
+                continue
+            end
+        end
+        if skipped < nskip
+            skipped += 1
+            continue
+        end
     	if numfound > howmany
     	    break
     	end
@@ -147,16 +168,16 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
     sLat = size(Lat)[1]
     stimes = size(times)[1]
 
-    LonS = SharedArray{Float64}(sLon)
-    LatS = SharedArray{Float64}(sLat)
-    timesS = SharedArray{Float64}(stimes)
+    LonS = arraycons(sLon)
+    LatS = arraycons(sLat)
+    timesS = arraycons(stimes)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    sshsS = SharedArray{Float64}(sLon,sLat,stimes)
-    sshst1S = SharedArray{Float64}(sLon,sLat,1)
+    sshsS = arraycons(sLon,sLat,stimes)
+    sshst1S = arraycons(sLon,sLat,1)
     sshsS .= sshs
     sshst1S .= sshs[:,:,1:1]
 
@@ -185,12 +206,27 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true,startdate=nothing)
     return LonS,LatS,sshsS,timesS,sshst1S
 end
 
-function getP(foldername; ndays=90, sshs=false,remove_nan=true,start_date=nothing)
+"""
+    getP(foldername; [ndays=90, sshs=false,remove_nan=true,start_date=nothing,nskip=0,b=(0,0,1),arraycons=SharedArray{Float64})
+
+Reads in ocean velocity/sea surface height data from the files in `foldername`. Files are traversed
+in the order returned by `readdir`, and `ndays` files are read. If `start_date` (type DateTime) is set, only read
+in files with `t` field greater than or equal `start_date`. If `nskip` is not zero, skip `nskip` additional files. 
+The parameter `b` is used to define boundary behaviour in (x,y,t) direction, consult the `getIndex` function for details.
+The function `arraycons` is used to determine how the data should be stored (either `SharedArray{Float64}`, or `zeros` for a 
+normal array)
+"""
+function getP(
+    foldername;
+    ndays=90, sshs=false,remove_nan=true,start_date=nothing,nskip=0,b=(0,0,1),
+    arraycons=SharedArray{Float64}
+    )
     if sshs
-        Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan,start_date)
+        Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan,start_date,nskip,arraycons)
         Us,Vs = nothing,nothing
     else
-        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan,start_date)
+        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan,start_date,nskip,arraycons)
+
         ssh_vals  = nothing
     end
     nx = length(Lon)
@@ -202,7 +238,7 @@ function getP(foldername; ndays=90, sshs=false,remove_nan=true,start_date=nothin
         return res_full, Ust1, (Lon,Lat,times)
     else
         res_full = ItpMetadata(nx,ny,nt,SVector{3}([0.0,-90.0]), SVector{3}([360.,+90.0]),
-            ssh_vals,0,0,1)
+            ssh_vals,b[1],b[2],b[3])
         return res_full,sshst1, (Lon,Lat,times)
     end
 end
