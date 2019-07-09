@@ -230,11 +230,11 @@ function getP(
     ny = length(Lat)
     nt = length(times)
     if !sshs
-        res_full = ItpMetadata(nx,ny,nt,SVector{3}([0.0,-90.0,times[1]]), SVector{3}([360.,+90.0,times[end] + times[2] - times[1] ]),
+        res_full = ItpMetadata(nx,ny,nt,SVector{3}([Lon[1],Lat[1],times[1]]), SVector{3}([360. + Lon[1], 180.0 + Lat[1],times[end] + times[2] - times[1] ]),
             (Us,Vs),b[1],b[2],b[3])
         return res_full, Ust1, (Lon,Lat,times)
     else
-        res_full = ItpMetadata(nx,ny,nt,SVector{3}([0.0,-90.0]), SVector{3}([360.,+90.0]),
+        res_full = ItpMetadata(nx,ny,nt,SVector{3}([Lon[1],Lat[1],times[1]]), SVector{3}([360. + Lon[1],180. + Lat[1],times[end]+times[2]-times[1]]),
             ssh_vals,b[1],b[2],b[3])
         return res_full,sshst1, (Lon,Lat,times)
     end
