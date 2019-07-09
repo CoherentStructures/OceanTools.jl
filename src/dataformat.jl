@@ -108,11 +108,8 @@ function read_ocean_velocities(
     Ust1S .= Us[:,:,1:1]
 
 
-
-    UsS .= Us
-    VsS .= Vs
-    Ust1S .= Us[:,:,1:1]
-
+    Us = nothing
+    VS = nothing
 
     #Remove NaN values
 
@@ -123,7 +120,7 @@ function read_ocean_velocities(
             	    if isnan(UsS[i,j,t])
                 		UsS[i,j,t] = 0.0
             	    end
-            	    if isnan(Vs[i,j,t])
+            	    if isnan(VsS[i,j,t])
                 		VsS[i,j,t] = 0.0
             	    end
             	end
