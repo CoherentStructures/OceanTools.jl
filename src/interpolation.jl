@@ -285,6 +285,33 @@ struct ItpMetadata{T}
                         )
     end
 end
+struct ItpMetadata3{T}
+    nx::Int
+    ny::Int
+    nz::Int
+    nt::Int
+    LL::SVector{4,Float64}
+    UR::SVector{4,Float64}
+    data::T
+    boundaryX::Int64
+    boundaryY::Int64
+    boundaryZ::Int64
+    boundaryT::Int64
+
+    function ItpMetadata3(nx::Int,ny::Int,nz::Int,nt::Int,
+                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
+                        data::T, boundaryX::Int64,
+                        boundaryY::Int64,boundaryZ::Int64,boundaryT::Int64
+                        ) where T
+        @assert length(LL) == 4
+        @assert length(UR) == 4
+        new{T}(nx,ny,nz,nt, (@SVector [LL[1],LL[2],LL[3],LL[4]]),
+                        (@SVector [UR[1],UR[2],UR[3],UR[3]]),
+                        data,boundaryX,boundaryY,boundaryZ,boundaryT
+                        )
+    end
+end
+
 
 
 """
@@ -299,12 +326,13 @@ function uv_trilinear(
         )::SArray{Tuple{2},T,1,2} where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return uv_trilinear_internal(u,p,tin,Us,Vs)
+    return uv_trilinear_internal(u,Us,Vs,p,tin)
 end
 
 
 function uv_trilinear_internal(
-        u::SArray{Tuple{2},T,1,2},p::ItpMetadata{S},tin::Float64,Us::U,Vs::U
+        u::SArray{Tuple{2},T,1,2},Us::U,Vs::U,
+        p::ItpMetadata{S},tin::Float64,
         )::SArray{Tuple{2},T,1,2} where {T<:Real,S,U}
 
     #Get data from p
@@ -761,3 +789,56 @@ function interpolateSSHPeriodic(Lon,Lat,Time, sshs, interpolation_type)
     return sshE
 end
 =#
+
+"""
+    uv_quadlinear(u,p,tin)
+
+Quadlinear interpolation of velocity field at `u` at time `tin`.
+Velocity field stored in `p` as returned by `getP`
+Periodic boundary in x and y, constant in t direction
+"""
+function uv_quadlinear(
+        u::SArray{Tuple{3},T,1,3},p::ItpMetadata3{S},tin::Float64
+        )::SArray{Tuple{3},T,1,3} where {T<:Real,S}
+    Us = p.data[1]
+    Vs = p.data[2]
+    Ws = p.data[3]
+    return uv_quadlinear_internal(u,Us,Vs,Ws,p,tin)
+end
+
+function uv_quadlinear_internal(
+        u::SArray{Tuple{3},T,1,3},Us::U,Vs::U,Ws::U,
+        p::ItpMetadata3{S},tin::Float64,
+        )::SArray{Tuple{3},T,1,3} where {T<:Real,S,U}
+
+    #Get data from p
+    nx::Int64, ny::Int64,nz::Int64, nt::Int64 = p.nx,p.ny,p.nz,p.nt
+    ll1::Float64,ll2::Float64,ll3::Float64, t0::Float64 = p.LL
+    ur1::Float64,ur2::Float64,ur3::Float64, tf::Float64 = p.UR
+
+    @inbounds xindex::Int64,xpp::Int64, xcoord::T = getIndex(u[1],ll1,ur1, nx, p.boundaryX)
+    @inbounds yindex::Int64,ypp::Int64, ycoord::T = getIndex(u[2],ll2,ur2, ny, p.boundaryY)
+    @inbounds zindex::Int64,zpp::Int64, zcoord::T = getIndex(u[3],ll3,ur3, nz, p.boundaryZ)
+    tindex::Int64,tpp::Int64, tcoord::T = getIndex(tin,t0,tf, nt, p.boundaryT)
+
+    @inbounds begin
+        function singleTriLinear(what,zindex)::Float64
+            r1u::T =  what[xindex+1,yindex + 1,zindex + 1 ,tindex + 1 ]*(1 - xcoord) +
+                            what[ xpp + 1,yindex + 1,zindex + 1, tindex + 1 ]*xcoord
+            r2u::T =  what[xindex+1,ypp + 1,zindex + 1,tindex + 1 ]*(1 - xcoord) +
+                            what[ xpp + 1,ypp + 1,zindex + 1, tindex + 1 ]*xcoord
+            r3u::T =  what[xindex + 1,yindex + 1,zindex + 1,tpp + 1 ]*(1 - xcoord) +
+                            what[ xpp + 1,yindex + 1,zindex + 1, tpp + 1 ]*xcoord
+            r4u::T =  what[xindex+1,ypp + 1,zindex + 1, tpp + 1 ]*(1 - xcoord) +
+                            what[ xpp + 1,ypp + 1,zindex + 1, tpp + 1 ]*xcoord
+            res1::T =  (
+                (1-tcoord)*((1-ycoord)*r1u + ycoord*r2u)
+                 + tcoord*((1-ycoord)*r3u + ycoord*r4u))
+            return res1
+        end
+        function singleQuadLinear(what)::Float64
+            return (1-zcoord)*singleTriLinear(what,zindex) + zcoord*singleTriLinear(what,zpp)
+        end
+        result = SArray{Tuple{3},T,1,3}((singleQuadLinear(Us),singleQuadLinear(Vs),singleQuadLinear(Ws)))
+    end
+end

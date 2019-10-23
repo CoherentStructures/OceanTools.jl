@@ -1,6 +1,7 @@
 export
    uv_trilinear,
    uv_tricubic,
+   uv_quadlinear,
    ssh_tricubic,
    ssh_tricubic_gradient,
    uv_tricubic_eqvari,
