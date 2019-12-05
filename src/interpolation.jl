@@ -210,6 +210,7 @@ end
     )::Tuple{Int64,Int64,Int64,Int64,Float64}
     if boundary_behaviour == 0 #Periodic boundary
         xindex::Int64, xcoord::Float64 = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0),1)
+        xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1),nx)
@@ -533,7 +534,7 @@ function uv_tricubic_internal(u::StaticVector{2,T},Us::U,Vs::U,p::ItpMetadata{S}
 
     @inbounds xindex::Int64,xpp::Int64,xpp2::Int64,xmm::Int64, xcoord::T = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
     @inbounds yindex::Int64,ypp::Int64,ypp2::Int64,ymm::Int64, ycoord::T = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
+    @inbounds tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex,yindex,tindex,
