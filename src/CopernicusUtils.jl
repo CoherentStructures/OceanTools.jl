@@ -2,7 +2,7 @@ module CopernicusUtils
 
     using Tensors, StaticArrays, SparseArrays, SharedArrays
 
-    import Images
+    import FileIO
     import NCDatasets
     import Dates
     const NCD = NCDatasets

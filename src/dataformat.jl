@@ -1,5 +1,5 @@
 function loadEarthMap(nat_earth_path)
-    natearth= Images.load(nat_earth_path)
+    natearth= FileIO.load(nat_earth_path)
     ULpixel = [-179.98888888888889, 89.98888888888889]
     pixelSpacing = 0.02222222222222
     nLon = range(ULpixel[2], step=-1 * pixelSpacing, length=size(natearth)[1])
