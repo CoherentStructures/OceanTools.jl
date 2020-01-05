@@ -5,9 +5,10 @@ language: julia
 
 julia:
     - 1.0
+    - 1
     - nightly
 
-notifications: 
+notifications:
     email: false
 
 git:
@@ -17,10 +18,10 @@ git:
 jobs:
   include:
     - stage: deploy
-      julia: 1.0
+      if: branch = master
+      julia: 1
       os: linux
       script:
-        - julia --color=yes --project=docs/ -e 'using Pkg; Pkg.add("Documenter"); Pkg.clone(pwd()); Pkg.instantiate()'
+        - julia --color=yes --project=docs/ -e 'using Pkg; Pkg.add("Documenter"); Pkg.add(PackageSpec(path=pwd())); Pkg.instantiate()'
         - julia --color=yes --project=docs/ docs/make.jl
       after_success: skip
-
