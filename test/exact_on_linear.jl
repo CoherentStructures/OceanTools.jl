@@ -38,14 +38,14 @@
         @test abs(res1[1] - fu(x,y,t)) < 4e-13
         @test abs(res1[2] - fv(x,y,t)) < 4e-13
 
-        @test abs(res2[1] - fu(x,y,t)) < 1e-11
-        @test abs(res2[2] - fv(x,y,t)) < 1e-11
+        @test abs(res2[1] - fu(x,y,t)) < 2e-11
+        @test abs(res2[2] - fv(x,y,t)) < 2e-11
     end
 end
 
 @testset "exact_on_constant" begin
     xspan = range(0,stop=100,length=123)
-    yspan = range(102.5,stop=150.0,length=151)
+    yspan = range(102.5,stop=150.0,length=15)
     tspan = range(11.5, stop=20.7, length=100)
 
     fu(x,y,t) = 5.0
