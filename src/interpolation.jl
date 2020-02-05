@@ -2,6 +2,9 @@
 #Constants needed for tricubic interpolation
 include("coeff.jl")
 
+@enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2
+
+
 function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where TA
     n,m = size(A)
 
@@ -163,22 +166,19 @@ end
 Calculates the indexes `i,j` and local coordinates corresponding to a real number `x`
 where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 [x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where each intervals has equal length.
-If `boundary_behaviour==0`, periodic boundary behaviour is assumed.
-If `boundary_behaviour==1`, flat boundary behaviour is assumed.
-If `boundary_behaviour==2`, an out of bounds error is thrown is x is outside of the interval.
 """
 @inline function getIndex(
     x::Float64, x0::Float64,xf::Float64,
-    nx::Int64,boundary_behaviour::Int
+    nx::Int64,boundary_behaviour::BoundaryBehaviour
     )::Tuple{Int64,Int64,Float64}
-    if boundary_behaviour == 0 #Periodic boundary
+    if boundary_behaviour == periodic #Periodic boundary
         xindex::Int64, xcoord::Float64 = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0),1)
         xpp = (xindex+1) % nx
-    elseif boundary_behaviour >= 1 # Flat boundary (==1) or Error (==2)
+    elseif boundary_behaviour == flat || boundary_behaviour == outofbounds
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0),1)
         xpp = xindex + 1
         if xpp >= nx
-            if boundary_behaviour==2
+            if boundary_behaviour == outofbounds
                 throw(BoundsError("Out of bounds access"))
             else
                 xpp = (nx-1)
@@ -188,7 +188,7 @@ If `boundary_behaviour==2`, an out of bounds error is thrown is x is outside of 
             xindex = (nx-1)
         end
         if xindex < 0
-            if boundary_behaviour==2
+            if boundary_behaviour == outofbounds
                 throw(BoundsError("Out of bounds access"))
             else
                 xindex = 0
@@ -206,22 +206,22 @@ end
 
 @inline function getIndex2(
     x::Float64, x0::Float64,xf::Float64,
-    nx::Int64,boundary_behaviour::Int
+    nx::Int64,boundary_behaviour::BoundaryBehaviour
     )::Tuple{Int64,Int64,Int64,Int64,Float64}
-    if boundary_behaviour == 0 #Periodic boundary
+    if boundary_behaviour == periodic #Periodic boundary
         xindex::Int64, xcoord::Float64 = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0),1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1),nx)
-    elseif boundary_behaviour >= 1 # Flat boundary (==1) or Error (==2)
+    elseif boundary_behaviour == flat || boundary_behaviour == outofbounds # Flat boundary (==1) or Error (==2)
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0),1)
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex-1
 
         if xpp2 >= nx
-            if boundary_behaviour==2
+            if boundary_behaviour == outofbounds
                 throw(BoundsError("Out of bounds access"))
             else
                 xpp2 = (nx-1)
@@ -238,7 +238,7 @@ end
         end
 
         if xmm < 0
-            if boundary_behaviour==2
+            if boundary_behaviour == outofbounds
                 throw(BoundsError("Out of bounds access"))
             else
                 xmm = 0
@@ -262,6 +262,7 @@ end
     return xindex, xpp,xpp2,xmm, xcoord
 end
 
+
 struct ItpMetadata{T}
     nx::Int
     ny::Int
@@ -269,9 +270,22 @@ struct ItpMetadata{T}
     LL::SVector{3,Float64}
     UR::SVector{3,Float64}
     data::T
-    boundaryX::Int64
-    boundaryY::Int64
-    boundaryT::Int64
+    boundaryX::BoundaryBehaviour
+    boundaryY::BoundaryBehaviour
+    boundaryT::BoundaryBehaviour
+    function ItpMetadata(nx::Int,ny::Int,nt::Int,
+                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
+                        data::T, boundaryX::BoundaryBehaviour,
+                        boundaryY::BoundaryBehaviour,boundaryT::BoundaryBehaviour
+                        ) where T
+        @assert length(LL) == 3
+        @assert length(UR) == 3
+        new{T}(nx,ny,nt, (@SVector [LL[1],LL[2],LL[3]]),
+                        (@SVector [UR[1],UR[2],UR[3]]),
+                        data,boundaryX,boundaryY,boundaryT
+                        )
+    end
+
 
     function ItpMetadata(nx::Int,ny::Int,nt::Int,
                         LL::AbstractArray{Float64},UR::AbstractArray{Float64},
@@ -282,10 +296,11 @@ struct ItpMetadata{T}
         @assert length(UR) == 3
         new{T}(nx,ny,nt, (@SVector [LL[1],LL[2],LL[3]]),
                         (@SVector [UR[1],UR[2],UR[3]]),
-                        data,boundaryX,boundaryY,boundaryT
+                        data,BoundaryBehaviour(boundaryX),BoundaryBehaviour(boundaryY),BoundaryBehaviour(boundaryT)
                         )
     end
 end
+
 struct ItpMetadata3{T}
     nx::Int
     ny::Int
