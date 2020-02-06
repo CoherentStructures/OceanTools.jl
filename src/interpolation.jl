@@ -82,22 +82,36 @@ function build_full_finite_difference_matrix()
     end
 
     #Specify (mixed) second derivatives
+    
     for i in 0:1, j in 0:1, k in 0:1
         for ddirection1 in 1:2
             if ddirection1 == 1
-                ddirection1T::Tuple{Int64,Int64,Int64} = (1,0,0)
+                ddirection1T::Tuple{Int64,Int64,Int64} = (0,1,0)
             else
-                ddirection1T = (0,1,0)
+                ddirection1T = (1,0,0)
             end
             for ddirection2 in (ddirection1+1):3
                 if ddirection2 == 2
-                    ddirection2T::Tuple{Int64,Int64,Int64} = (0,1,0)
+                    ddirection2T::Tuple{Int64,Int64,Int64} = (1,0,0)
                 else
                     ddirection2T = (0,0,1)
                 end
+                    shift::Int64 = 0
+                    if ddirection1 == 1 
+                        if ddirection2 == 2
+                            #xy derivative
+                            shift = 0
+                        else
+                            #xz derivative
+                            shift = 2
+                        end
+                    else
+                        #yz derivative
+                        shift = 1
+                    end
 
                     aindex = i + 2*j + 4*k + 32 +
-                        8*((ddirection1-1) + (ddirection2 - ddirection1 - 1)) + 1
+                        8*(shift) + 1
                     result[aindex,to1d(
                              i + ddirection1T[1] + ddirection2T[1],
                              j + ddirection1T[2] + ddirection2T[2],
