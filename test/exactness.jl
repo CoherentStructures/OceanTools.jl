@@ -5,44 +5,47 @@ Random.seed!(1234)
     yspan = range(0,stop=10.0,length=123)
     tspan = range(0, stop=10.0, length=123)
 
-    fu(x,y,t) =  3*x^2 + x + 2*y + π*t + 2*x*y + exp(1)*t^2  + x^2*t
-    fv(x,y,t) = fu(y,x,t)
+    myfuncs = [(x,y,t) -> 3*x^2 + x + 2*y + π*t + 2*x*y + exp(1)*t^2  + x^2*t, (x,y,t) -> x*y*t]
 
-    U = [ fu(x,y,t) for x in xspan, y in yspan, t in tspan]
-    V = [ fv(x,y,t) for x in xspan, y in yspan, t in tspan]
+    for fu in myfuncs
+        fv(x,y,t) = x*y*t#fu(y,x,t)
+
+        U = [ fu(x,y,t) for x in xspan, y in yspan, t in tspan]
+        V = [ fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
 
-    metadata = CopernicusUtils.ItpMetadata(length(xspan),length(yspan),length(tspan),
-         (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]), (@SVector [maximum(xspan)+step(xspan),maximum(yspan)+step(yspan),maximum(tspan)+step(tspan)]), (U,V),
-        2,2,2)
+        metadata = CopernicusUtils.ItpMetadata(length(xspan),length(yspan),length(tspan),
+             (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]), (@SVector [maximum(xspan)+step(xspan),maximum(yspan)+step(yspan),maximum(tspan)+step(tspan)]), (U,V),
+            2,2,2)
 
-    ntotest = 5000
+        ntotest = 5000
 
-    randpts = rand(3,ntotest)
+        randpts = rand(3,ntotest)
 
-    maxe1 = 0.0
-    maxe2 = 0.0
+        maxe1 = 0.0
+        maxe2 = 0.0
 
-    for i in 1:ntotest
-        x,y,t = randpts[:,i]
+        for i in 1:ntotest
+            x,y,t = randpts[:,i]
 
-        x *= 5.0
-        x += 3
+            x *= 5.0
+            x += 3
 
-        y *= 5.0
-        y += 3
+            y *= 5.0
+            y += 3
 
-        t *= 5.0
-        t += 3.0
+            t *= 5.0
+            t += 3.0
 
-        curpt = @SVector [x,y]
-        res2 =  uv_tricubic(curpt, metadata,t)
+            curpt = @SVector [x,y]
+            res2 =  uv_tricubic(curpt, metadata,t)
 
-        maxe1 = max(maxe1, abs(res2[1] - fu(x,y,t)))
-        maxe2 = max(maxe1, abs(res2[2] - fv(x,y,t)))
+            maxe1 = max(maxe1, abs(res2[1] - fu(x,y,t)))
+            maxe2 = max(maxe1, abs(res2[2] - fv(x,y,t)))
+        end
+        @test maxe1 < 5e-11
+        @test maxe2 < 5e-11
     end
-    @test maxe1 < 5e-11
-    @test maxe2 < 5e-11
 end
 
 
