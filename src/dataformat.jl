@@ -89,7 +89,7 @@ function read_ocean_velocities(
     	Vs[:,:,numfound] .= V
     end
     if numfound < howmany
-        throw(BoundsError"Only read in $numfound velocities!! (required $howmany)")
+        throw(BoundsError("Only read in $numfound velocities!! (required $howmany)"))
     end
 
     sLon = size(Lon)[1]
@@ -163,7 +163,7 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true,start_date=nothing,nskip
     end
 
     if numfound < howmany
-        throw(BoundsError"Only read in $numfound sea surface heights!! (required $howmany)")
+        throw(BoundsError("Only read in $numfound sea surface heights!! (required $howmany)"))
     end
 
     sLon = size(Lon)[1]
