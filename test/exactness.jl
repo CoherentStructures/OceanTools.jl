@@ -41,8 +41,8 @@ Random.seed!(1234)
         maxe1 = max(maxe1, abs(res2[1] - fu(x,y,t)))
         maxe2 = max(maxe1, abs(res2[2] - fv(x,y,t)))
     end
-    @test maxe1 < 5e-9
-    @test maxe2 < 5e-9
+    @test maxe1 < 5e-11
+    @test maxe2 < 5e-11
 end
 
 
