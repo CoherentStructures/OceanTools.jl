@@ -75,7 +75,7 @@ function read_ocean_velocities(
     	if numfound >= howmany
     	    break
     	end
-	numfound += 1
+        numfound += 1
     	U,t = loadField(fname,"ugos")
     	V,_= loadField(fname,"vgos")
     	rescaleUV!!(U,V,Lon,Lat)
@@ -84,7 +84,7 @@ function read_ocean_velocities(
     	Vs[:,:,numfound] .= V
     end
     if numfound < howmany
-	@warn "Only read in $numfound velocities!!"
+        @error "Only read in $numfound velocities!! (required $howmany)"
     end
 
     sLon = size(Lon)[1]
@@ -158,7 +158,7 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true,start_date=nothing,nskip
     end
 
     if numfound < howmany
-	@warn "Only read in $numfound sea surface heights!!"
+        @error "Only read in $numfound sea surface heights!! (required $howmany)"
     end
 
     sLon = size(Lon)[1]
