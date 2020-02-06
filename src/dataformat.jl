@@ -228,7 +228,7 @@ function getP(
         Us,Vs = nothing,nothing
     else
         Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername;
-                remove_nan=remove_nan,start_date=start_date,skip=nskip,arraycons=arraycons
+                remove_nan=remove_nan,start_date=start_date,nskip=nskip,arraycons=arraycons
                 )
 
         ssh_vals  = nothing
