@@ -21,6 +21,13 @@ function getTime(filename)
      return t
 end
 
+function daysSince1950(t)
+     #TODO: deal with this better
+     tdays = round(t - Dates.DateTime(1950,1,1,0,0,0),Dates.Hour
+			                       ).value/24.0
+     return tdays
+end
+
 function loadField(filename,fieldname)
      d = NCD.Dataset(filename)
 
@@ -28,11 +35,9 @@ function loadField(filename,fieldname)
 
      t = d["time"][1]
      close(d)
-     #TODO: deal with this better
-     tdays = round(t - Dates.DateTime(1950,1,1,0,0,0),Dates.Hour
-			                       ).value/24.0
-     return U,tdays
+     return U,daysSince1950(tdays)
 end
+
 
 function rescaleUV!!(U,V,Lon,Lat)
 	R = 6371e3 # Radius of the Earth in Kilometeres
@@ -48,7 +53,7 @@ end
 
 function read_ocean_velocities(
                     howmany,
-                    ww_ocean_data,
+                    ww_ocean_data;
                     remove_nan=true,
                     start_date=nothing,
                     nskip=0,
@@ -84,7 +89,7 @@ function read_ocean_velocities(
     	Vs[:,:,numfound] .= V
     end
     if numfound < howmany
-        @error "Only read in $numfound velocities!! (required $howmany)"
+        throw(BoundsError"Only read in $numfound velocities!! (required $howmany)")
     end
 
     sLon = size(Lon)[1]
@@ -158,7 +163,7 @@ function read_ssh(howmany,ww_ocean_data,remove_nan=true,start_date=nothing,nskip
     end
 
     if numfound < howmany
-        @error "Only read in $numfound sea surface heights!! (required $howmany)"
+        throw(BoundsError"Only read in $numfound sea surface heights!! (required $howmany)")
     end
 
     sLon = size(Lon)[1]
@@ -222,7 +227,9 @@ function getP(
         Lon,Lat, ssh_vals,times,sshsT1 = read_ssh(ndays,foldername,remove_nan,start_date,nskip,arraycons)
         Us,Vs = nothing,nothing
     else
-        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername,remove_nan,start_date,nskip,arraycons)
+        Lon,Lat,Us,Vs,times,Ust1 = read_ocean_velocities(ndays,foldername;
+                remove_nan=remove_nan,start_date=start_data,skip=nskip,arraycons=arraycons
+                )
 
         ssh_vals  = nothing
     end
