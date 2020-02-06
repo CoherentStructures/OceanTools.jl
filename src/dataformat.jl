@@ -35,7 +35,7 @@ function loadField(filename,fieldname)
 
      t = d["time"][1]
      close(d)
-     return U,daysSince1950(tdays)
+     return U,daysSince1950(t)
 end
 
 
