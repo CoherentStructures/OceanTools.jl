@@ -1,5 +1,6 @@
 using Test
-using StaticArrays
 using CopernicusUtils
 
 include("exactness.jl")
+
+include("benchmarks.jl")

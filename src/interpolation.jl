@@ -5,8 +5,8 @@ include("coeff.jl")
 @enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2
 
 
-function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where TA
-    n,m = size(A)
+function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where {TA}
+    n, m = size(A)
 
     coeff_initializers = Expr(:block, [:($(Symbol("y",i)) = zero(T)) for i in 1:n]...)
     coeff_updates = Expr(:block)
@@ -29,75 +29,72 @@ function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where TA
     end
 end
 
-@generated function A_times_svec(x::SArray{m}) where m
-    sparse_by_svec(getA(),:x)
+@generated function A_times_svec(x::SArray)
+    sparse_by_svec(getA(), :x)
 end
 
-@generated function F_times_svec(x::SArray{m}) where m
-    sparse_by_svec(build_full_finite_difference_matrix(),:x)
+@generated function F_times_svec(x::SArray)
+    sparse_by_svec(build_full_finite_difference_matrix(), :x)
 end
 
-@generated function AF_times_svec(x::SArray{m}) where m
-    tobuild = getA()*build_full_finite_difference_matrix()
-    sparse_by_svec(tobuild,:x)
+@generated function AF_times_svec(x::SArray)
+    tobuild = getA() * build_full_finite_difference_matrix()
+    sparse_by_svec(tobuild, :x)
 end
 
 
 """
     build_full_finite_difference_matrix()
 
-Returns a (sparse) matrix representation of the matrix that calculates
-the vector `b` from Lekien & Marsden's paper using first-order finite differences
-from grid values.
-
+Return a (sparse) matrix representation of the matrix that calculates the vector `b` from
+Lekien & Marsden's paper using first-order finite differences from grid values.
 """
 function build_full_finite_difference_matrix()
-    result = spzeros(Int64,64,64)
-    function to1d(i,j,k)
+    result = zeros(Int, 64, 64)
+    function to1d(i, j, k)
         return (i+1) + 4*(j+1) + 16*(k+1) + 1
     end
 
     #Point values
     for i in 0:1, j in 0:1, k in 0:1
-        aindex::Int64 = i + 2*j + 4*k +1
-        result[aindex,to1d(i,j,k)] = 8
+        aindex = i + 2j + 4k + 1
+        result[aindex, to1d(i, j, k)] = 8
     end
-
 
     #Specify first derivatives
 
     for ddirection in 1:3
         for i in 0:1, j in 0:1, k in 0:1
             if ddirection == 1
-                ddirectionT::Tuple{Int64,Int64,Int64} = (1,0,0)
+                ddirectionT = (1, 0, 0)
             elseif ddirection == 2
-                ddirectionT = (0,1,0)
+                ddirectionT = (0, 1, 0)
             elseif ddirection == 3
-                ddirectionT = (0,0,1)
+                ddirectionT = (0, 0, 1)
             end
-            aindex::Int64 = i + 2*j + 4*k + 8*ddirection + 1
-            result[aindex, to1d(i + ddirectionT[1], j + ddirectionT[2], k+ddirectionT[3])] = 4
-            result[aindex, to1d(i - ddirectionT[1], j - ddirectionT[2], k-ddirectionT[3])] = -4
+            aindex = i + 2j + 4k + 8ddirection + 1
+            result[aindex, to1d(i+ddirectionT[1], j+ddirectionT[2], k+ddirectionT[3])] =  4
+            result[aindex, to1d(i-ddirectionT[1], j-ddirectionT[2], k-ddirectionT[3])] = -4
         end
     end
 
     #Specify (mixed) second derivatives
-    
+
     for i in 0:1, j in 0:1, k in 0:1
         for ddirection1 in 1:2
             if ddirection1 == 1
-                ddirection1T::Tuple{Int64,Int64,Int64} = (0,1,0)
+                ddirection1T = (0, 1, 0)
             else
-                ddirection1T = (1,0,0)
+                ddirection1T = (1, 0, 0)
             end
             for ddirection2 in (ddirection1+1):3
                 if ddirection2 == 2
-                    ddirection2T::Tuple{Int64,Int64,Int64} = (1,0,0)
+                    ddirection2T = (1, 0, 0)
                 else
-                    ddirection2T = (0,0,1)
+                    ddirection2T = (0, 0, 1)
                 end
-                    shift::Int64 = 0
-                    if ddirection1 == 1 
+                    shift = 0
+                    if ddirection1 == 1
                         if ddirection2 == 2
                             #xy derivative
                             shift = 0
@@ -110,27 +107,26 @@ function build_full_finite_difference_matrix()
                         shift = 1
                     end
 
-                    aindex = i + 2*j + 4*k + 32 +
-                        8*(shift) + 1
-                    result[aindex,to1d(
+                    aindex = i + 2j + 4k + 32 + 8shift + 1
+                    result[aindex, to1d(
                              i + ddirection1T[1] + ddirection2T[1],
                              j + ddirection1T[2] + ddirection2T[2],
                              k + ddirection1T[3] + ddirection2T[3]
                              )] = 2
 
-                    result[aindex,to1d(
+                    result[aindex, to1d(
                             i + ddirection1T[1] - ddirection2T[1],
                             j + ddirection1T[2] - ddirection2T[2],
                             k + ddirection1T[3] - ddirection2T[3]
                             )] = -2
 
-                    result[aindex,to1d(
+                    result[aindex, to1d(
                             i - ddirection1T[1] + ddirection2T[1],
                             j - ddirection1T[2] + ddirection2T[2],
                             k - ddirection1T[3] + ddirection2T[3]
                             )] = -2
 
-                    result[aindex,to1d(
+                    result[aindex, to1d(
                             i - ddirection1T[1] - ddirection2T[1],
                             j - ddirection1T[2] - ddirection2T[2],
                             k - ddirection1T[3] - ddirection2T[3]
@@ -141,18 +137,18 @@ function build_full_finite_difference_matrix()
 
     #Specfiy (mixed) third derivatives
     for i in 0:1, j in 0:1, k in 0:1
-        aindex = i + 2*j + 4*k + 56 + 1
+        aindex = i + 2j + 4k + 56 + 1
 
-        result[aindex,to1d(i+1,j+1,k+1)] = 1
-        result[aindex,to1d(i+1,j+1,k-1)] = -1
-        result[aindex,to1d(i+1,j-1,k+1)] = -1
-        result[aindex,to1d(i+1,j-1,k-1)] = 1
-        result[aindex,to1d(i-1,j+1,k+1)] = -1
-        result[aindex,to1d(i-1,j+1,k-1)] = 1
-        result[aindex,to1d(i-1,j-1,k+1)] = 1
-        result[aindex,to1d(i-1,j-1,k-1)] = -1
+        result[aindex, to1d(i+1,j+1,k+1)] =  1
+        result[aindex, to1d(i+1,j+1,k-1)] = -1
+        result[aindex, to1d(i+1,j-1,k+1)] = -1
+        result[aindex, to1d(i+1,j-1,k-1)] =  1
+        result[aindex, to1d(i-1,j+1,k+1)] = -1
+        result[aindex, to1d(i-1,j+1,k-1)] =  1
+        result[aindex, to1d(i-1,j-1,k+1)] =  1
+        result[aindex, to1d(i-1,j-1,k-1)] = -1
     end
-    return result
+    return sparse(result)
 end
 
 const A = getA()
@@ -162,8 +158,8 @@ const AF = A*build_full_finite_difference_matrix()
 
 
 #Just divrem, but casts the first result to Int
-@inline function gooddivrem(x::T,y::Int64)::Tuple{Int64,T} where T
-    a,b = divrem(x,T(y))
+@inline function gooddivrem(x::T, y::Int64)::Tuple{Int64,T} where {T}
+    a, b = divrem(x, T(y))
     return Base.unsafe_trunc(Int,a), b
 end
 
@@ -175,21 +171,19 @@ end
 =#
 
 """
-    getIndex(x,x0,xf,nx,boundary_behaviour)
+    getIndex(x, x0, xf, nx, boundary_behaviour)
 
 Calculates the indexes `i,j` and local coordinates corresponding to a real number `x`
 where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
-[x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where each intervals has equal length.
+[x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where all intervals have equal length.
 """
-@inline function getIndex(
-    x::Float64, x0::Float64,xf::Float64,
-    nx::Int64,boundary_behaviour::BoundaryBehaviour
-    )::Tuple{Int64,Int64,Float64}
+@inline function getIndex(x::Float64, x0::Float64, xf::Float64, nx::Int64,
+                        boundary_behaviour::BoundaryBehaviour)::Tuple{Int64,Int64,Float64}
     if boundary_behaviour == periodic #Periodic boundary
-        xindex::Int64, xcoord::Float64 = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0),1)
+        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
     elseif boundary_behaviour == flat || boundary_behaviour == outofbounds
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0),1)
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         if xpp >= nx
             if boundary_behaviour == outofbounds
@@ -218,18 +212,16 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 end
 
 
-@inline function getIndex2(
-    x::Float64, x0::Float64,xf::Float64,
-    nx::Int64,boundary_behaviour::BoundaryBehaviour
-    )::Tuple{Int64,Int64,Int64,Int64,Float64}
+@inline function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int64,
+                boundary_behaviour::BoundaryBehaviour)::Tuple{Int64,Int64,Int64,Int64,Float64}
     if boundary_behaviour == periodic #Periodic boundary
-        xindex::Int64, xcoord::Float64 = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0),1)
+        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
-        xmm = mod((xindex-1),nx)
+        xmm = mod((xindex-1), nx)
     elseif boundary_behaviour == flat || boundary_behaviour == outofbounds # Flat boundary (==1) or Error (==2)
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0),1)
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex-1
@@ -269,11 +261,10 @@ end
         if xpp2 < 0
             xpp2 = 0
         end
-
     else
         throw(AssertionError("Bad value for boundary_behaviour"))
     end
-    return xindex, xpp,xpp2,xmm, xcoord
+    return xindex, xpp, xpp2, xmm, xcoord
 end
 
 
@@ -287,31 +278,28 @@ struct ItpMetadata{T}
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
     boundaryT::BoundaryBehaviour
-    function ItpMetadata(nx::Int,ny::Int,nt::Int,
-                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
-                        data::T, boundaryX::BoundaryBehaviour,
-                        boundaryY::BoundaryBehaviour,boundaryT::BoundaryBehaviour
-                        ) where T
+
+    function ItpMetadata(nx::Int, ny::Int, nt::Int,
+                        LL::AbstractArray{Float64}, UR::AbstractArray{Float64}, data::T,
+                        boundaryX::BoundaryBehaviour,
+                        boundaryY::BoundaryBehaviour,
+                        boundaryT::BoundaryBehaviour) where {T}
         @assert length(LL) == 3
         @assert length(UR) == 3
-        new{T}(nx,ny,nt, (@SVector [LL[1],LL[2],LL[3]]),
-                        (@SVector [UR[1],UR[2],UR[3]]),
-                        data,boundaryX,boundaryY,boundaryT
-                        )
+        new{T}(nx, ny, nt, (@SVector [LL[1], LL[2], LL[3]]), (@SVector [UR[1],UR[2],UR[3]]),
+                        data, boundaryX, boundaryY, boundaryT)
     end
 
-
-    function ItpMetadata(nx::Int,ny::Int,nt::Int,
-                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
-                        data::T, boundaryX::Int64,
-                        boundaryY::Int64,boundaryT::Int64
+    function ItpMetadata(nx::Int, ny::Int, nt::Int,
+                        LL::AbstractArray{Float64}, UR::AbstractArray{Float64}, data::T,
+                        boundaryX::Int64,
+                        boundaryY::Int64,
+                        boundaryT::Int64
                         ) where T
         @assert length(LL) == 3
         @assert length(UR) == 3
-        new{T}(nx,ny,nt, (@SVector [LL[1],LL[2],LL[3]]),
-                        (@SVector [UR[1],UR[2],UR[3]]),
-                        data,BoundaryBehaviour(boundaryX),BoundaryBehaviour(boundaryY),BoundaryBehaviour(boundaryT)
-                        )
+        new{T}(nx, ny, nt, (@SVector [LL[1],LL[2],LL[3]]), (@SVector [UR[1],UR[2],UR[3]]), data,
+            BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
     end
 end
 
@@ -323,102 +311,76 @@ struct ItpMetadata3{T}
     LL::SVector{4,Float64}
     UR::SVector{4,Float64}
     data::T
-    boundaryX::Int64
-    boundaryY::Int64
-    boundaryZ::Int64
-    boundaryT::Int64
+    boundaryX::Int
+    boundaryY::Int
+    boundaryZ::Int
+    boundaryT::Int
 
-    function ItpMetadata3(nx::Int,ny::Int,nz::Int,nt::Int,
-                        LL::AbstractArray{Float64},UR::AbstractArray{Float64},
-                        data::T, boundaryX::Int64,
-                        boundaryY::Int64,boundaryZ::Int64,boundaryT::Int64
-                        ) where T
+    function ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
+                        LL::AbstractArray{Float64},UR::AbstractArray{Float64}, data::T,
+                        boundaryX::Int, boundaryY::Int,boundaryZ::Int,boundaryT::Int) where {T}
         @assert length(LL) == 4
         @assert length(UR) == 4
-        new{T}(nx,ny,nz,nt, (@SVector [LL[1],LL[2],LL[3],LL[4]]),
-                        (@SVector [UR[1],UR[2],UR[3],UR[3]]),
-                        data,boundaryX,boundaryY,boundaryZ,boundaryT
-                        )
+        new{T}(nx, ny, nz, nt, (@SVector [LL[1], LL[2], LL[3], LL[4]]),
+                        (@SVector [UR[1], UR[2], UR[3], UR[3]]), data,
+                        boundaryX, boundaryY, boundaryZ, boundaryT)
     end
 end
 
 
 
 """
-    uv_trilinear(u,p,tin)
+    uv_trilinear(u, p, t)
 
-Trilinear interpolation of velocity field at `u` at time `tin`.
-Velocity field stored in `p` as returned by `getP`
-Periodic boundary in x and y, constant in t direction
+Trilinear interpolation of velocity field at `u` at time `t`.
+Velocity field stored in `p` as returned by [`getP`](@ref).
+Periodic boundary in x and y, constant in t direction.
 """
-function uv_trilinear(
-        u::SArray{Tuple{2},T,1,2},p::ItpMetadata{S},tin::Float64
-        )::SArray{Tuple{2},T,1,2} where {T<:Real,S}
+function uv_trilinear(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64)::SArray{Tuple{2},T,1,2} where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return uv_trilinear_internal(u,Us,Vs,p,tin)
+    return _uv_trilinear(u, Us, Vs, p, t)
 end
 
 
-function uv_trilinear_internal(
-        u::SArray{Tuple{2},T,1,2},Us::U,Vs::U,
-        p::ItpMetadata{S},tin::Float64,
-        )::SArray{Tuple{2},T,1,2} where {T<:Real,S,U}
-
+@inbounds function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
     #Get data from p
-    nx::Int64, ny::Int64, nt::Int64 = p.nx,p.ny,p.nt
-    ll1::Float64,ll2::Float64,t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,tf::Float64 = p.UR
+    nx, ny, nt = p.nx, p.ny, p.nt
+    ll1, ll2, t0 = p.LL
+    ur1, ur2, tf = p.UR
 
-    @inbounds xindex::Int64,xpp::Int64, xcoord::T = getIndex(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64, ycoord::T = getIndex(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex::Int64,tpp::Int64, tcoord::T = getIndex(tin,t0,tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
 
-    @inbounds begin
-    r1u::T =  Us[xindex+1,yindex + 1,tindex + 1 ]*(1 - xcoord) +
-                    Us[ xpp + 1,yindex + 1, tindex + 1 ]*xcoord
-    r2u::T =  Us[xindex+1,ypp + 1,tindex + 1 ]*(1 - xcoord) +
-                    Us[ xpp + 1,ypp + 1, tindex + 1 ]*xcoord
-    r3u::T =  Us[xindex + 1,yindex + 1,tpp + 1 ]*(1 - xcoord) +
-                    Us[ xpp + 1,yindex + 1, tpp + 1 ]*xcoord
-    r4u::T =  Us[xindex+1,ypp + 1,tpp + 1 ]*(1 - xcoord) +
-                    Us[ xpp + 1,ypp + 1, tpp + 1 ]*xcoord
-    res1::T =  (
-        (1-tcoord)*((1-ycoord)*r1u + ycoord*r2u)
-         + tcoord*((1-ycoord)*r3u + ycoord*r4u))
+    r1u = Us[xindex + 1, yindex + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, yindex + 1, tindex + 1]*xcoord
+    r2u = Us[xindex + 1, ypp + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, ypp + 1, tindex + 1]*xcoord
+    r3u = Us[xindex + 1, yindex + 1, tpp + 1]*(1-xcoord) + Us[xpp + 1, yindex + 1, tpp + 1]*xcoord
+    r4u = Us[xindex + 1, ypp + 1, tpp + 1]*(1-xcoord) + Us[xpp + 1,ypp + 1, tpp + 1 ]*xcoord
+    res1 = ((1-tcoord)*((1-ycoord)*r1u + ycoord*r2u) + tcoord*((1-ycoord)*r3u + ycoord*r4u))
 
-    r1v::T =  Vs[xindex+1,yindex + 1,tindex + 1 ]*(1 - xcoord) +
-                    Vs[ xpp + 1,yindex + 1, tindex + 1 ]*xcoord
-    r2v::T =  Vs[xindex+1,ypp + 1,tindex + 1 ]*(1 - xcoord) +
-                    Vs[ xpp + 1,ypp + 1, tindex + 1 ]*xcoord
-    r3v::T =  Vs[xindex + 1,yindex + 1,tpp + 1 ]*(1 - xcoord) +
-                    Vs[ xpp + 1,yindex + 1, tpp + 1 ]*xcoord
-    r4v::T =  Vs[xindex+1,ypp + 1,tpp + 1 ]*(1 - xcoord) +
-                    Vs[ xpp + 1,ypp + 1, tpp + 1 ]*xcoord
-    res2::T =  (
-        (1-tcoord)*((1-ycoord)*r1v + ycoord*r2v)
-         + tcoord*((1-ycoord)*r3v + ycoord*r4v))
-     end
+    r1v = Vs[xindex+1, yindex + 1, tindex + 1]*(1 - xcoord) + Vs[xpp + 1, yindex + 1, tindex + 1]*xcoord
+    r2v = Vs[xindex+1, ypp + 1, tindex + 1]*(1 - xcoord) + Vs[xpp + 1, ypp + 1, tindex + 1]*xcoord
+    r3v = Vs[xindex + 1, yindex + 1,tpp + 1]*(1 - xcoord) + Vs[xpp + 1, yindex + 1, tpp + 1]*xcoord
+    r4v = Vs[xindex+1, ypp + 1, tpp + 1]*(1 - xcoord) + Vs[xpp + 1, ypp + 1, tpp + 1]*xcoord
+    res2 = ((1-tcoord)*((1-ycoord)*r1v + ycoord*r2v) + tcoord*((1-ycoord)*r3v + ycoord*r4v))
 
-    return SArray{Tuple{2},T,1,2}((res1,res2))
+    return SVector{2,T}((res1, res2))
 end
 
 @inline function base_tricubic_interpolation(
-        xindex::Int64,yindex::Int64,tindex::Int64,
-        xpp::Int64,ypp::Int64,tpp::Int64,
-        xpp2::Int64,ypp2::Int64,tpp2::Int64,
-        xmm::Int64,ymm::Int64,tmm::Int64,
-        nx::Int64,ny::Int64,
+        xindex::Int, yindex::Int, tindex::Int,
+        xpp::Int, ypp::Int, tpp::Int,
+        xpp2::Int, ypp2::Int, tpp2::Int,
+        xmm::Int, ymm::Int, tmm::Int,
+        nx::Int, ny::Int,
         x::T, y::T, t::T,
-        Us::U,
-        Vs::U
-        )::SVector{2,T} where {T,U}
-    xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
-    yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
-    tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
+        Us::U, Vs::U) where {T,U}
+    xp = SVector{4,T}((1.0, x, x^2, x^3))
+    yp = SVector{4,T}((1.0, y, y^2, y^3))
+    tp = SVector{4,T}((1.0, t, t^2, t^3))
 
-    function earthIndexRaw(i::Int64,j::Int64,k::Int64)::Int64
-        xi::Int64 = 0
+    function earthIndexRaw(i::Int, j::Int, k::Int)
         if i == -1
             xi = xmm
         elseif i == 0
@@ -427,8 +389,9 @@ end
             xi = xpp
         elseif i == 2
             xi = xpp2
+        else
+            xi = 0
         end
-        yi::Int64 = 0
 
         if j == -1
             yi = ymm
@@ -438,9 +401,10 @@ end
             yi = ypp
         elseif j == 2
             yi = ypp2
+        else
+            yi = 0
         end
 
-        ti::Int64 = 0
         if k == -1
             ti = tmm
         elseif k == 0
@@ -449,6 +413,8 @@ end
             ti = tpp
         elseif k == 2
             ti = tpp2
+        else
+            ti = 0
         end
         return xi + yi * nx + ti*nx*ny + 1
     end
@@ -461,36 +427,34 @@ end
     #SVector{64,Float64}(build_full_finite_difference_matrix()*Vector{Float64}(vec(vvals)))
     #)
 
-    res1::T = zero(T)
-    res2::T = zero(T)
-    @inbounds for i in 1:4,j in 1:4, k in 1:4
+    res1 = zero(T)
+    res2 = zero(T)
+    @inbounds for i in 1:4, j in 1:4, k in 1:4
             res1 += xp[i]*yp[j]*tp[k]*AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
             res2 += xp[i]*yp[j]*tp[k]*AFbyv[(i-1) + 4*(j-1) + 16*(k-1) + 1]
     end
-    return @SVector [res1/8,res2/8]
+    return SVector{2,T}((res1/8.0, res2/8.0))
 end
 
 @inline function base_tricubic_interpolation_gradient(
-        xindex::Int64,yindex::Int64,tindex::Int64,
-        xpp::Int64,ypp::Int64,tpp::Int64,
-        xpp2::Int64,ypp2::Int64,tpp2::Int64,
-        xmm::Int64,ymm::Int64,tmm::Int64,
-        nx::Int64,ny::Int64,
+        xindex::Int, yindex::Int, tindex::Int,
+        xpp::Int, ypp::Int, tpp::Int,
+        xpp2::Int, ypp2::Int, tpp2::Int,
+        xmm::Int, ymm::Int, tmm::Int,
+        nx::Int, ny::Int,
         x::T, y::T, t::T,
-        Us::U,
-        )::SVector{3,T} where {T,U}
+        Us::U) where {T,U}
 
-    xp::SVector{4,T} = SVector{4,T}((1.0,x,x^2,x^3))
-    dxp::SVector{4,T} = SVector{4,T}((0.0,1.0,2*x,3*x^2))
-    yp::SVector{4,T} = SVector{4,T}((1.0,y,y^2,y^3))
-    dyp::SVector{4,T} = SVector{4,T}((0.0,1.0,2*y,3*y^2))
-    tp::SVector{4,T} = SVector{4,T}((1.0,t,t^2,t^3))
-    result1::T = zero(T)
-    result2::T = zero(T)
-    result3::T = zero(T)
+    xp = SVector{4,T}((1.0, x, x^2, x^3))
+    dxp = SVector{4,T}((0.0, 1.0, 2*x, 3*x^2))
+    yp = SVector{4,T}((1.0, y, y^2, y^3))
+    dyp = SVector{4,T}((0.0, 1.0, 2*y, 3*y^2))
+    tp = SVector{4,T}((1.0, t, t^2, t^3))
+    result1 = zero(T)
+    result2 = zero(T)
+    result3 = zero(T)
 
-    function earthIndexRaw(i::Int64,j::Int64,k::Int64)::Int64
-        xi::Int64 = 0
+    function earthIndexRaw(i::Int, j::Int, k::Int)
         if i == -1
             xi = xmm
         elseif i == 0
@@ -499,8 +463,9 @@ end
             xi = xpp
         elseif i == 2
             xi = xpp2
+        else
+            xi = 0
         end
-        yi::Int64 = 0
 
         if j == -1
             yi = ymm
@@ -510,9 +475,10 @@ end
             yi = ypp
         elseif j == 2
             yi = ypp2
+        else
+            yi = 0
         end
 
-        ti::Int64 = 0
         if k == -1
             ti = tmm
         elseif k == 0
@@ -521,6 +487,8 @@ end
             ti = tpp
         elseif k == 2
             ti = tpp2
+        else
+            ti = 0
         end
         return xi + yi * nx + ti*nx*ny + 1
     end
@@ -528,195 +496,184 @@ end
     uvals = @inbounds @SArray T[Us[earthIndexRaw(i,j,k)] for i in -1:2, j in -1:2, k in -1:2]
 
     @inbounds AFbyu = A_times_svec(F_times_svec(uvals))
-    @inbounds for i in 1:4,j in 1:4, k in 1:4
-            curx = xp[i]
-            curdx = dxp[i]
-            cury = yp[j]
-            curdy = dyp[j]
-            curt = tp[k]
-            aval = AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
-            result1 += curdx*cury*curt*aval
-            result2 += curx*curdy*curt*aval
-            result3 += curx*cury*curt*aval
+    @inbounds for i in 1:4, j in 1:4, k in 1:4
+        curx = xp[i]
+        curdx = dxp[i]
+        cury = yp[j]
+        curdy = dyp[j]
+        curt = tp[k]
+        aval = AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
+        result1 += curdx*cury*curt*aval
+        result2 += curx*curdy*curt*aval
+        result3 += curx*cury*curt*aval
     end
-    return SVector{3,T}((result1/8.0,result2/8.0,result3/8.0))
+    return SVector{3,T}((result1/8.0, result2/8.0, result3/8.0))
 end
 
 """
-    uv_tricubic(x,p,tin)
-Tricubic interpolation of velocity field at `u` at time `tin`.
-Velocity field stored in `p` as returned by `getP`
-Periodic boundary in x and y, constant in t direction
+    uv_tricubic(x, p, t)
+
+Tricubic interpolation of velocity field at `u` at time `t`.
+Velocity field stored in `p` as returned by [`getP`](@ref).
+Periodic boundary in x and y, constant in t direction.
 """
-function uv_tricubic(u::StaticVector{2,T},p::ItpMetadata{S},tin::Float64) where {T<:Real,S}
+function uv_tricubic(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return uv_tricubic_internal(u,Us,Vs,p,tin)
+    return _uv_tricubic(u, Us, Vs, p, t)
 end
 
 #Actual interpolation version
-function uv_tricubic_internal(u::StaticVector{2,T},Us::U,Vs::U,p::ItpMetadata{S},tin::Float64) where {T<:Real,S,U}
+function _uv_tricubic(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
 
-    nx::Int64, ny::Int64, nt::Int64 = p.nx,p.ny,p.nt
-    ll1::Float64,ll2::Float64,t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,tf::Float64 = p.UR
+    nx, ny, nt = p.nx, p.ny, p.nt
+    ll1, ll2, t0 = p.LL
+    ur1, ur2, tf = p.UR
 
-    @inbounds xindex::Int64,xpp::Int64,xpp2::Int64,xmm::Int64, xcoord::T = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64,ypp2::Int64,ymm::Int64, ycoord::T = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    @inbounds tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
+    @inbounds xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    @inbounds yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    @inbounds tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
-        xindex,yindex,tindex,
-        xpp,ypp,tpp,
-        xpp2,ypp2,tpp2,
-        xmm,ymm,tmm,
-        nx,ny,
-        xcoord, ycoord,tcoord,
-        Us,Vs
-        )
+        xindex, yindex, tindex,
+        xpp, ypp, tpp,
+        xpp2, ypp2, tpp2,
+        xmm, ymm, tmm,
+        nx, ny,
+        xcoord, ycoord, tcoord,
+        Us, Vs)
 end
 
 
 
 """
-    ssh_tricubic(x,p,tin)
-Tricubic interpolation of scalar field field at `u` at time `tin`.
-Scalar field stored in `p` as returned by `getP`
-Periodic boundary in x and y, constant in t direction
+    ssh_tricubic(x, p, t)
+Tricubic interpolation of scalar field field at `u` at time `t`.
+Scalar field stored in `p` as returned by [`getP`](@ref).
+Periodic boundary in x and y, constant in t direction.
 """
-function ssh_tricubic(u::StaticVector{2,T},p,tin::Float64) where {T<:Real}
+function ssh_tricubic(u::StaticVector{2,T}, p, t::Float64) where {T<:Real}
     sshs = p[7]
-    return ssh_tricubic_internal(u,sshs,p,tin)
+    return _ssh_tricubic(u, sshs, p, t)
 end
 
 
-function ssh_tricubic_internal(u::StaticVector{2,T},sshs::S,p,tin::Float64) where {T<:Real,S}
+function _ssh_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:Real,S}
 
-    nx::Int64, ny::Int64, nt::Int64 = p.nx,p.ny,p.nt
-    ll1::Float64,ll2::Float64,t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,tf::Float64 = p.UR
+    nx, ny, nt = p.nx, p.ny, p.nt
+    ll1, ll2, t0 = p.LL
+    ur1, ur2, tf = p.UR
 
-    @inbounds xindex::Int64,xpp::Int64,xpp2::Int64,xmm::Int64, xcoord::T = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64,ypp2::Int64,ymm::Int64, ycoord::T = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
+    @inbounds xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    @inbounds yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
-        xindex,yindex,tindex,
-        xpp,ypp,tpp,
-        xpp2,ypp2,tpp2,
-        xmm,ymm,tmm,
-        nx,ny,
-        xcoord, ycoord,tcoord,
-        sshs,sshs
-        )[1] #TODO: Modify this to avoid doing the work twice
-
+        xindex, yindex, tindex,
+        xpp, ypp, tpp,
+        xpp2, ypp2, tpp2,
+        xmm, ymm, tmm,
+        nx, ny,
+        xcoord, ycoord, tcoord,
+        sshs, sshs)[1] #TODO: Modify this to avoid doing the work twice
 end
 
-
-
-function ssh_tricubic_gradient(u::StaticVector{2,T},p::ItpMetadata{S},tin::Float64) where {T<:Real,S}
+function ssh_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     sshs = p.data
-    return ssh_tricubic_gradient_internal(u,sshs,p,tin)
+    return _ssh_tricubic_gradient(u, sshs, p, t)
 end
 
 
-function ssh_tricubic_gradient_internal(u::StaticVector{2,T},sshs::U,p::ItpMetadata{S},tin::Float64) where {T<:Real,S,U}
+function _ssh_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
 
-    nx::Int64, ny::Int64, nt::Int64 = p.nx,p.ny,p.nt
-    ll1::Float64,ll2::Float64,t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,tf::Float64 = p.UR
+    nx, ny, nt = p.nx, p.ny, p.nt
+    ll1, ll2, t0 = p.LL
+    ur1, ur2, tf = p.UR
 
-    @inbounds xindex::Int64,xpp::Int64,xpp2::Int64,xmm::Int64, xcoord::T = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64,ypp2::Int64,ymm::Int64, ycoord::T = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
+    @inbounds xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
+    @inbounds yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
     res1 = base_tricubic_interpolation_gradient(
-        xindex,yindex,tindex,
-        xpp,ypp,tpp,
-        xpp2,ypp2,tpp2,
-        xmm,ymm,tmm,
-        nx,ny,
-        xcoord, ycoord,tcoord,
-        sshs
-        )
+        xindex, yindex, tindex,
+        xpp, ypp, tpp,
+        xpp2, ypp2, tpp2,
+        xmm, ymm, tmm,
+        nx, ny,
+        xcoord, ycoord, tcoord,
+        sshs)
 
-    return SVector{2,T}((res1[1]*nx/(ur1-ll1),res1[2]*ny/(ur2-ll2)))
+    return SVector{2,T}((res1[1]*nx/(ur1-ll1), res1[2]*ny/(ur2-ll2)))
 end
 
 
 #Function barrier version
-function uv_tricubic_eqvari(u::StaticMatrix{2,3,T},p::ItpMetadata{S},tin::Float64) where {T<:Real,S}
+function uv_tricubic_eqvari(u::StaticMatrix{2,3,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
-    return uv_tricubic_eqvari_internal(u,Us,Vs,p,tin)
+    return _uv_tricubic_eqvari(u, Us, Vs, p, t)
 end
 
 
-function uv_tricubic_eqvari_internal(
-    uIn::StaticMatrix{2,3,T}, Us::U,Vs::U,p::ItpMetadata{S},tin::Float64) where {T<:Real,S,U}
+function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
     u = @SVector [uIn[1,1], uIn[2,1]]
 
+    nx, ny, nt = p.nx, p.ny, p.nt
+    ll1, ll2, t0 = p.LL
+    ur1, ur2, tf = p.UR
 
-    nx::Int64, ny::Int64, nt::Int64 = p.nx,p.ny,p.nt
-    ll1::Float64,ll2::Float64,t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,tf::Float64 = p.UR
+    @inbounds xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
+    @inbounds yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
 
-    @inbounds xindex::Int64,xpp::Int64,xpp2::Int64,xmm::Int64, xcoord::T = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64,ypp2::Int64,ymm::Int64, ycoord::T = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex::Int64,tpp::Int64,tpp2::Int64,tmm::Int64, tcoord::T = getIndex2(tin,t0,tf, nt, p.boundaryT)
+    Uitp = base_tricubic_interpolation_gradient(
+        xindex, yindex, tindex,
+        xpp, ypp, tpp,
+        xpp2, ypp2, tpp2,
+        xmm, ymm, tmm,
+        nx, ny,
+        xcoord, ycoord, tcoord,
+        Us)
 
-    Uitp::SVector{3,T} = base_tricubic_interpolation_gradient(
-        xindex,yindex,tindex,
-        xpp,ypp,tpp,
-        xpp2,ypp2,tpp2,
-        xmm,ymm,tmm,
-        nx,ny,
-        xcoord, ycoord,tcoord,
-        Us
-        )
-
-    Vitp::SVector{3,T} = base_tricubic_interpolation_gradient(
-        xindex,yindex,tindex,
-        xpp,ypp,tpp,
-        xpp2,ypp2,tpp2,
-        xmm,ymm,tmm,
-        nx,ny,
-        xcoord, ycoord,tcoord,
-        Vs
-        )
+    Vitp = base_tricubic_interpolation_gradient(
+        xindex, yindex, tindex,
+        xpp, ypp, tpp,
+        xpp2, ypp2, tpp2,
+        xmm, ymm, tmm,
+        nx, ny,
+        xcoord, ycoord, tcoord,
+        Vs)
 
     return @SMatrix [Uitp[3] (Uitp[1]*uIn[1,2]*nx/(ur1-ll1) + Uitp[2]*uIn[2,2]*ny/(ur2-ll2)) (Uitp[1]*uIn[1,3]*nx/(ur1-ll1) + Uitp[2]*uIn[2,3]*ny/(ur2-ll2));
     Vitp[3] (Vitp[1]*uIn[1,2]*nx/(ur1-ll1)  + Vitp[2]*uIn[2,2]*ny/(ur2-ll2)) (Vitp[1]*uIn[1,3]*nx/(ur1-ll1) + Vitp[2]*uIn[2,3]*ny/(ur2-ll2))]
 end
 
-function interp_inbounds(x,y,p)
-    return !isnan(p[3][x,y])
+function interp_inbounds(x, y, p)
+    return !isnan(p[3][x, y])
 end
-function inbounds_checker_bilinear(x,y,p)
-    return !isnan(uv_trilinear(SVector{2,Float64}((x,y)),p[6],p[6][5][1])[1])
+function inbounds_checker_bilinear(x, y, p)
+    return !isnan(uv_trilinear(SVector{2,Float64}((x,y)), p[6], p[6][5][1])[1])
 end
 
-function sshVelocityRHS(u,p::ItpMetadata{S},t::Float64) where S
-    du::SVector{2,Float64} = ssh_tricubic_gradient(u,p,t)
+function sshVelocityRHS(u, p::ItpMetadata{S}, t::Float64) where S
+    ∇h = ssh_tricubic_gradient(u, p, t)
 
-    g::Float64 = 9.807 #Gravitational constant (m/s^2)
-    R::Float64 = 6371e3 #Radius of earth (m)
+    g = 9.807 #Gravitational constant (m/s^2)
+    R = 6371e3 #Radius of earth (m)
     Ω = 7.2921159e-5 #Mean angular velocity (rad/s)
 
+    # convert from m/deg to m/rad
+    scale = 360/(2π)
+    ∇h *= scale
 
-    #Rescale to m/radian
-    du1 = 360/(2π)*du[1]
-    du2 = 360/(2π)*du[2]
-
-    #Calculate velocity
+    # calculate velocity conversion factor in rad/s
     C = g/(R^2*2*Ω*sin(deg2rad(u[2]))*cos(deg2rad(u[2])))
-    #Go from radians/s to radians/day
+    # convert from rad/s to rad/day
     C *= 24*3600
+    # convert from rad/day to deg/day
+    C *= scale
 
-    #Go from  radians/day to deg/day
-    C *= 360/(2π)
-
-    return  SVector{2,Float64}((-du2*C,du1*C))
+    return  SVector{2,Float64}((-∇h[2]*C, ∇h[1]*C))
 end
 
 
@@ -821,54 +778,45 @@ end
 =#
 
 """
-    uv_quadlinear(u,p,tin)
+    uv_quadlinear(u, p, t)
 
-Quadlinear interpolation of velocity field at `u` at time `tin`.
-Velocity field stored in `p` as returned by `getP`
-Periodic boundary in x and y, constant in t direction
+Quadlinear interpolation of velocity field at `u` at time `t`.
+Velocity field stored in `p` as returned by [`getP`](@®ef).
+Periodic boundary in x and y, constant in t direction.
 """
-function uv_quadlinear(
-        u::SArray{Tuple{3},T,1,3},p::ItpMetadata3{S},tin::Float64
-        )::SArray{Tuple{3},T,1,3} where {T<:Real,S}
+function uv_quadlinear(u::SVector{3,T}, p::ItpMetadata3{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
     Ws = p.data[3]
-    return uv_quadlinear_internal(u,Us,Vs,Ws,p,tin)
+    return _uv_quadlinear(u, Us, Vs, Ws, p, t)
 end
 
-function uv_quadlinear_internal(
-        u::SArray{Tuple{3},T,1,3},Us::U,Vs::U,Ws::U,
-        p::ItpMetadata3{S},tin::Float64,
-        )::SArray{Tuple{3},T,1,3} where {T<:Real,S,U}
-
+function _uv_quadlinear(u::SVector{3,T}, Us::U, Vs::U, Ws::U, p::ItpMetadata3{S}, t::Float64) where {T<:Real,S,U}
     #Get data from p
-    nx::Int64, ny::Int64,nz::Int64, nt::Int64 = p.nx,p.ny,p.nz,p.nt
-    ll1::Float64,ll2::Float64,ll3::Float64, t0::Float64 = p.LL
-    ur1::Float64,ur2::Float64,ur3::Float64, tf::Float64 = p.UR
+    nx, ny, nz, nt = p.nx, p.ny, p.nz, p.nt
+    ll1, ll2, ll3, t0 = p.LL
+    ur1, ur2, ur3, tf = p.UR
 
-    @inbounds xindex::Int64,xpp::Int64, xcoord::T = getIndex(u[1],ll1,ur1, nx, p.boundaryX)
-    @inbounds yindex::Int64,ypp::Int64, ycoord::T = getIndex(u[2],ll2,ur2, ny, p.boundaryY)
-    @inbounds zindex::Int64,zpp::Int64, zcoord::T = getIndex(u[3],ll3,ur3, nz, p.boundaryZ)
-    tindex::Int64,tpp::Int64, tcoord::T = getIndex(tin,t0,tf, nt, p.boundaryT)
+    @inbounds xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
+    @inbounds yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
+    @inbounds zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, nz, p.boundaryZ)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
 
     @inbounds begin
-        function singleTriLinear(what,zindex)::Float64
-            r1u::T =  what[xindex+1,yindex + 1,zindex + 1 ,tindex + 1 ]*(1 - xcoord) +
-                            what[ xpp + 1,yindex + 1,zindex + 1, tindex + 1 ]*xcoord
-            r2u::T =  what[xindex+1,ypp + 1,zindex + 1,tindex + 1 ]*(1 - xcoord) +
-                            what[ xpp + 1,ypp + 1,zindex + 1, tindex + 1 ]*xcoord
-            r3u::T =  what[xindex + 1,yindex + 1,zindex + 1,tpp + 1 ]*(1 - xcoord) +
-                            what[ xpp + 1,yindex + 1,zindex + 1, tpp + 1 ]*xcoord
-            r4u::T =  what[xindex+1,ypp + 1,zindex + 1, tpp + 1 ]*(1 - xcoord) +
-                            what[ xpp + 1,ypp + 1,zindex + 1, tpp + 1 ]*xcoord
-            res1::T =  (
-                (1-tcoord)*((1-ycoord)*r1u + ycoord*r2u)
-                 + tcoord*((1-ycoord)*r3u + ycoord*r4u))
-            return res1
+        function singleTriLinear(what,zindex)
+            r1u = what[xindex+1, yindex + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
+                            what[xpp + 1, yindex + 1, zindex + 1, tindex + 1]*xcoord
+            r2u = what[xindex+1, ypp + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
+                            what[xpp + 1, ypp + 1, zindex + 1, tindex + 1]*xcoord
+            r3u = what[xindex + 1, yindex + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
+                            what[xpp + 1, yindex + 1, zindex + 1, tpp + 1]*xcoord
+            r4u = what[xindex+1, ypp + 1, zindex + 1, tpp + 1]*(1 - xcoord) +
+                            what[xpp + 1, ypp + 1, zindex + 1, tpp + 1]*xcoord
+            return ((1-tcoord)*((1-ycoord)*r1u + ycoord*r2u) + tcoord*((1-ycoord)*r3u + ycoord*r4u))
         end
-        function singleQuadLinear(what)::Float64
-            return (1-zcoord)*singleTriLinear(what,zindex) + zcoord*singleTriLinear(what,zpp)
+        function singleQuadLinear(what)
+            return (1-zcoord)*singleTriLinear(what, zindex) + zcoord*singleTriLinear(what, zpp)
         end
-        result = SArray{Tuple{3},T,1,3}((singleQuadLinear(Us),singleQuadLinear(Vs),singleQuadLinear(Ws)))
     end
+    return SVector{3,T}((singleQuadLinear(Us), singleQuadLinear(Vs), singleQuadLinear(Ws)))
 end
