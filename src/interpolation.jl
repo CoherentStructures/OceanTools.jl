@@ -301,6 +301,23 @@ struct ItpMetadata{T}
         new{T}(nx, ny, nt, (@SVector [LL[1],LL[2],LL[3]]), (@SVector [UR[1],UR[2],UR[3]]), data,
             BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
     end
+
+    function ItpMetadata(
+                        xspan::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}},
+                        yspan::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}},
+                        tspan::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}},
+                        data::T,
+                        boundaryX::BoundaryBehaviour,
+                        boundaryY::BoundaryBehaviour,
+                        boundaryT::BoundaryBehaviour) where {T}
+        nx = length(xspan)
+        ny = length(yspan)
+        nt = length(tspan)
+        LL = (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)])
+        UR = (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)])
+        new{T}(nx, ny, nt, LL,UR, data, boundaryX, boundaryY, boundaryT)
+    end
+
 end
 
 struct ItpMetadata3{T}

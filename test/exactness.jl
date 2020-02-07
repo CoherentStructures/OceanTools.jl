@@ -18,10 +18,8 @@ Random.seed!(1234)
         U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-        metadata = @inferred CopernicusUtils.ItpMetadata(length(xspan), length(yspan), length(tspan),
-             (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
-             (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),
-             (U, V), 2, 2, 2)
+        metadata = @inferred CopernicusUtils.ItpMetadata(xspan,yspan,tspan,
+             (U, V), CopernicusUtils.outofbounds, CopernicusUtils.outofbounds, CopernicusUtils.outofbounds)
 
         for i in 1:5000
             x, y, t = rand(3)
