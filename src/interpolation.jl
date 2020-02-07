@@ -336,14 +336,14 @@ Trilinear interpolation of velocity field at `u` at time `t`.
 Velocity field stored in `p` as returned by [`getP`](@ref).
 Periodic boundary in x and y, constant in t direction.
 """
-function uv_trilinear(u::SArray{Tuple{2},T,1,2}, p::ItpMetadata{S}, t::Float64)::SArray{Tuple{2},T,1,2} where {T<:Real,S}
+function uv_trilinear(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64)::SArray{Tuple{2},T,1,2} where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
     return _uv_trilinear(u, Us, Vs, p, t)
 end
 
 
-@inbounds function _uv_trilinear(u::SVector{2}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
+@inbounds function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
     #Get data from p
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
@@ -365,7 +365,7 @@ end
     r4v = Vs[xindex+1, ypp + 1, tpp + 1]*(1 - xcoord) + Vs[xpp + 1, ypp + 1, tpp + 1]*xcoord
     res2 = ((1-tcoord)*((1-ycoord)*r1v + ycoord*r2v) + tcoord*((1-ycoord)*r3v + ycoord*r4v))
 
-    return SVector{2}((res1, res2))
+    return SVector{2,T}((res1, res2))
 end
 
 @inline function base_tricubic_interpolation(
@@ -524,7 +524,7 @@ function uv_tricubic(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:R
 end
 
 #Actual interpolation version
-function _uv_tricubic(u::StaticVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
+function _uv_tricubic(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
 
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
