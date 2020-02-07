@@ -8,7 +8,7 @@ Random.seed!(1234)
     myfuncs = [(x,y,t) -> 3*x^2 + x + 2*y + π*t + 2*x*y + exp(1)*t^2  + x^2*t, (x,y,t) -> x*y*t]
 
     for fu in myfuncs
-        fv(x,y,t) = x*y*t#fu(y,x,t)
+        fv(x,y,t) = fu(y,x,t)
 
         U = [ fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [ fv(x,y,t) for x in xspan, y in yspan, t in tspan]
