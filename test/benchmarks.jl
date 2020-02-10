@@ -3,6 +3,18 @@ using Random, StaticArrays, BenchmarkTools
 
 Random.seed!(1234)
 
+@testset "type stability" begin
+    x = rand()
+    x0 = 0.0
+    xf = 1.0
+    nx = 123
+    for boundary in instances(CopernicusUtils.BoundaryBehaviour)
+        @inferred CopernicusUtils.getIndex(x, x0, xf, nx, boundary)
+        @inferred CopernicusUtils.getIndex2(x, x0, xf, nx, boundary)
+    end
+    @inferred CopernicusUtils.gooddivrem(x, nx)
+end
+
 @testset "zero allocations" begin
     xspan = range(0, stop=10.0, length=123)
     yspan = range(0, stop=10.0, length=123)

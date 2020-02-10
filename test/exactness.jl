@@ -2,6 +2,8 @@ using Test, CopernicusUtils, Random, StaticArrays
 
 Random.seed!(1234)
 
+oob = CopernicusUtils.outofbounds
+
 @testset "exact_on_quadratic" begin
     xspan = range(0, stop=10.0, length=123)
     yspan = range(0, stop=10.0, length=123)
@@ -15,8 +17,8 @@ Random.seed!(1234)
         U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-        metadata = @inferred CopernicusUtils.ItpMetadata(xspan,yspan,tspan,
-             (U, V), CopernicusUtils.outofbounds, CopernicusUtils.outofbounds, CopernicusUtils.outofbounds)
+        metadata = @inferred CopernicusUtils.ItpMetadata(xspan, yspan, tspan,
+             (U, V), oob, oob, oob)
 
         for i in 1:5000
             x, y, t = rand(3)
@@ -54,7 +56,7 @@ end
     metadata = CopernicusUtils.ItpMetadata(length(xspan), length(yspan), length(tspan),
          (@SVector [minimum(xspan), minimum(yspan), minimum(tspan)]),
          (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),
-         (U, V), 2, 2, 2)
+         (U, V), oob, oob, oob)
 
     for i in 1:5000
         x, y, t = rand(3)
@@ -87,7 +89,7 @@ end
     U = fill(u, length(xspan), length(yspan), length(tspan))
     V = fill(v, length(xspan), length(yspan), length(tspan))
 
-    for per in [0,1]
+    for per in (CopernicusUtils.periodic, CopernicusUtils.flat)
         metadata = CopernicusUtils.ItpMetadata(length(xspan), length(yspan), length(tspan),
              (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
              (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),
