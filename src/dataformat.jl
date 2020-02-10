@@ -39,15 +39,16 @@ end
 Convert lon-lat velocities `U` and `V` from units degrees/second to kilometers/day.
 Save the result in Us[:,:,numfound] (resp. Vs[:,:,numfound])
 """
-function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
+function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan)
     R = 6371e3 # radius of the Earth in kilometers
     s = 1/(R*3600*24)
     n = size(U)[1]
     m = size(U)[2]
+    missing_value = remove_nan ? 0.0 : NaN
     for j in 1:m
         for i in 1:n
-            Us[i,j,numfound] = ismissing(U[i,j]) ? NaN :  sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
-            Vs[i,j,numfound] = ismissing(V[i,j]) ? NaN : rad2deg(V[i,j]) * s
+            Us[i,j,numfound] = ismissing(U[i,j]) ? missing_value :  sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
+            Vs[i,j,numfound] = ismissing(V[i,j]) ? missing_value : rad2deg(V[i,j]) * s
         end
     end
 end
@@ -59,8 +60,23 @@ function read_ocean_velocities(howmany, ww_ocean_data;
                                 arraycons=SharedArray{Float64})
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
-    Us = zeros(length(Lon), length(Lat), howmany)
-    Vs = zeros(length(Lon), length(Lat), howmany)
+
+    sLon = size(Lon)[1]
+    sLat = size(Lat)[1]
+    stimes = size(times)[1]
+
+    LonS = arraycons(sLon)
+    LatS = arraycons(sLat)
+    timesS = arraycons(stimes)
+
+    LonS .= Lon
+    LatS .= Lat
+    timesS .= times
+
+    Us = arraycons(sLon, sLat, stimes)
+    Vs = arraycons(sLon, sLat, stimes)
+    Ust1S = arraycons(sLon, sLat, 1)
+
     numfound = 0
     skipped = 0
     for fname_part in readdir(ww_ocean_data)
@@ -82,7 +98,7 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         d = NCD.Dataset(fname)
         U, t = loadField(d,fname, "ugos")
         V, _ = loadField(d,fname, "vgos")
-        rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
+        rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan)
         close(d)
         times[numfound] = t
     end
@@ -90,41 +106,9 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         throw(BoundsError("Only read in $numfound velocities!! (required $howmany)"))
     end
 
-    sLon = size(Lon)[1]
-    sLat = size(Lat)[1]
-    stimes = size(times)[1]
-
-    LonS = arraycons(sLon)
-    LatS = arraycons(sLat)
-    timesS = arraycons(stimes)
-
-    LonS .= Lon
-    LatS .= Lat
-    timesS .= times
-
-    UsS = arraycons(sLon, sLat, stimes)
-    VsS = arraycons(sLon, sLat, stimes)
-    Ust1S = arraycons(sLon, sLat, 1)
-
-    UsS .= Us
-    VsS .= Vs
     Ust1S .= Us[:,:,1:1]
 
-    Us = nothing
-    VS = nothing
-
-    # remove NaN values
-    if remove_nan
-        for t in 1:stimes, j in 1:sLat, i in 1:sLon
-            if isnan(UsS[i,j,t])
-                UsS[i,j,t] = 0.0
-            end
-            if isnan(VsS[i,j,t])
-                VsS[i,j,t] = 0.0
-            end
-        end
-    end
-    return LonS, LatS, UsS, VsS, timesS, Ust1S
+    return Lon, Lat, Us, Vs, times, Ust1S
 end
 
 function read_ssh(howmany, ww_ocean_data;
@@ -153,9 +137,11 @@ function read_ssh(howmany, ww_ocean_data;
         end
         numfound += 1
         fname = ww_ocean_data * "/" * fname_part
-        ssh,t = loadField(fname, "adt")
+        d = NCD.Dataset(fname)
+        ssh,t = loadField(d,fname, "adt")
         times[numfound] = t
         sshs[:,:,numfound] .= ssh
+        close(d)
     end
 
     if numfound < howmany
