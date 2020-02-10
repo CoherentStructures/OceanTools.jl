@@ -49,7 +49,7 @@ function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
     for j in 1:m
         for i in 1:n
             Us[i,j,numfound] = ismissing(U[i,j]) ? NaN :  sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
-            Vs[i,j,numfound] = ismissing(V[i,j]) = NaN : rad2deg(V[i,j]) * s
+            Vs[i,j,numfound] = ismissing(V[i,j]) ? NaN : rad2deg(V[i,j]) * s
         end
     end
 end
