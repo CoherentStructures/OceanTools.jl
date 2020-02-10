@@ -1,9 +1,23 @@
 using Test, CopernicusUtils
 using Random, StaticArrays, BenchmarkTools
 
+Random.seed!(1234)
+
+@testset "type stability" begin
+    x = rand()
+    x0 = 0.0
+    xf = 1.0
+    nx = 123
+    for boundary in instances(CopernicusUtils.BoundaryBehaviour)
+        @inferred CopernicusUtils.getIndex(x, x0, xf, nx, boundary)
+        @inferred CopernicusUtils.getIndex2(x, x0, xf, nx, boundary)
+    end
+    @inferred CopernicusUtils.gooddivrem(x, nx)
+end
+
 @testset "zero allocations" begin
-    xspan = range(0, stop=10,length=123)
-    yspan = range(0, stop=10.0,length=123)
+    xspan = range(0, stop=10.0, length=123)
+    yspan = range(0, stop=10.0, length=123)
     tspan = range(0, stop=10.0, length=123)
 
     oob = CopernicusUtils.outofbounds
@@ -22,9 +36,9 @@ using Random, StaticArrays, BenchmarkTools
 
     curpt = SVector{2}(10rand(2))
     t = 10rand()
-    # @benchmark uv_tricubic($curpt, $metadata, $t)
-    # @benchmark uv_trilinear($curpt, $metadata, $t)
-    
+    @benchmark uv_tricubic($curpt, $metadata, $t)
+    @benchmark uv_trilinear($curpt, $metadata, $t)
+
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)
     @inferred uv_tricubic(curpt, metadata, t)
