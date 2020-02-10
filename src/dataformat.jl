@@ -41,7 +41,7 @@ Save the result in Us[:,:,numfound] (resp. Vs[:,:,numfound])
 """
 function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan)
     R = 6371e3 # radius of the Earth in kilometers
-    s = 1/(R*3600*24)
+    s =3600*24/R
     n = size(U)[1]
     m = size(U)[2]
     missing_value = remove_nan ? 0.0 : NaN
