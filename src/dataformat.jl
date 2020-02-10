@@ -80,8 +80,8 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         end
         numfound += 1
         d = NCD.Dataset(fname)
-        U, t = loadField(fname, "ugos")
-        V, _ = loadField(fname, "vgos")
+        U, t = loadField(d,fname, "ugos")
+        V, _ = loadField(d,fname, "vgos")
         rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
         close(d)
         times[numfound] = t
