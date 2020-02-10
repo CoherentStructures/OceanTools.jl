@@ -28,10 +28,9 @@ function daysSince1950(t)
     return tdays
 end
 
-function loadField(filename, fieldname)
-    d = NCD.Dataset(filename)
+function loadField(d,filename, fieldname)
     t = d["time"][1]
-    return d,d[fieldname][:], daysSince1950(t)
+    return d[fieldname][:], daysSince1950(t)
 end
 
 """
@@ -80,8 +79,9 @@ function read_ocean_velocities(howmany, ww_ocean_data;
             break
         end
         numfound += 1
-        d,U, t = loadField(fname, "ugos")
-        d,V, _ = loadField(fname, "vgos")
+        d = NCD.Dataset(fname)
+        U, t = loadField(fname, "ugos")
+        V, _ = loadField(fname, "vgos")
         rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
         close(d)
         times[numfound] = t
