@@ -30,26 +30,26 @@ end
 
 function loadField(filename, fieldname)
     d = NCD.Dataset(filename)
-    U = NCDatasets.nomissing(d[fieldname][:], NaN)[:,:,1]
     t = d["time"][1]
     close(d)
-    return U, daysSince1950(t)
+    return d[fieldname][:], daysSince1950(t)
 end
 
 """
-    rescaleUV!!(U, V, Lon, Lat)
+    rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
 
 Convert lon-lat velocities `U` and `V` from units degrees/second to kilometers/day.
+Save the result in Us[:,:,numfound] (resp. Vs[:,:,numfound])
 """
-function rescaleUV!!(U, V, Lon, Lat)
+function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
     R = 6371e3 # radius of the Earth in kilometers
     s = 1/(R*3600*24)
     n = size(U)[1]
     m = size(U)[2]
     for j in 1:m
         for i in 1:n
-            U[i,j] = sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
-            V[i,j] = rad2deg(V[i,j]) * s
+            Us[i,j,numfound] = ismissing(U[i,j]) ? NaN :  sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
+            Vs[i,j,numfound] = ismissing(V[i,j]) = NaN : rad2deg(V[i,j]) * s
         end
     end
 end
@@ -83,10 +83,8 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         numfound += 1
         U, t = loadField(fname, "ugos")
         V, _ = loadField(fname, "vgos")
-        rescaleUV!!(U, V, Lon, Lat)
+        rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
         times[numfound] = t
-        Us[:,:,numfound] .= U
-        Vs[:,:,numfound] .= V
     end
     if numfound < howmany
         throw(BoundsError("Only read in $numfound velocities!! (required $howmany)"))
