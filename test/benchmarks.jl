@@ -1,9 +1,11 @@
 using Test, CopernicusUtils
 using Random, StaticArrays, BenchmarkTools
 
+Random.seed!(1234)
+
 @testset "zero allocations" begin
-    xspan = range(0, stop=10,length=123)
-    yspan = range(0, stop=10.0,length=123)
+    xspan = range(0, stop=10.0, length=123)
+    yspan = range(0, stop=10.0, length=123)
     tspan = range(0, stop=10.0, length=123)
 
     oob = CopernicusUtils.outofbounds
@@ -22,9 +24,9 @@ using Random, StaticArrays, BenchmarkTools
 
     curpt = SVector{2}(10rand(2))
     t = 10rand()
-    # @benchmark uv_tricubic($curpt, $metadata, $t)
-    # @benchmark uv_trilinear($curpt, $metadata, $t)
-    
+    @benchmark uv_tricubic($curpt, $metadata, $t)
+    @benchmark uv_trilinear($curpt, $metadata, $t)
+
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)
     @inferred uv_tricubic(curpt, metadata, t)

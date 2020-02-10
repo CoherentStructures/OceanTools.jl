@@ -12,9 +12,6 @@ Random.seed!(1234)
     for fu in myfuncs
         fv(x,y,t) = fu(y,x,t)
 
-        U = [ fu(x,y,t) for x in xspan, y in yspan, t in tspan]
-        V = [ fv(x,y,t) for x in xspan, y in yspan, t in tspan]
-
         U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
