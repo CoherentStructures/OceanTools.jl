@@ -1,5 +1,6 @@
 # CopernicusUtils.jl
 [![Build Status](https://travis-ci.org/CoherentStructures/CopernicusUtils.jl.svg?branch=master)](https://travis-ci.org/CoherentStructures/CopernicusUtils.jl)
+[![codecov](https://codecov.io/gh/CoherentStructures/CopernicusUtils.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/CoherentStructures/CopernicusUtils.jl)
 
 
 Utilities for working with certain [Copernicus](http://marine.copernicus.eu/) Datasets. This package can be used (amongst other things) to generate large test cases to use with the [CoherentStructures.jl](https://github.com/CoherentStructures/CoherentStructures.jl) package.

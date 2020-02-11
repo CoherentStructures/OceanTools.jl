@@ -14,6 +14,10 @@ notifications:
 git:
     depth: 99999
 
+after_success: skip
+    - julia --color=yes --project=test/coverage/ -e 'using Pkg; Pkg.instantiate()'
+    - julia --color=yes --project=test/coverage/ test/coverage/coverage.jl
+
 
 jobs:
   include:
@@ -24,7 +28,7 @@ jobs:
       script:
         - julia --color=yes --project=docs/ -e 'using Pkg; Pkg.add("Documenter"); Pkg.add(PackageSpec(path=pwd())); Pkg.instantiate()'
         - julia --color=yes --project=docs/ docs/make.jl
-      after_success:
+      after_success: skip
         - julia --color=yes --project=test/coverage/ -e 'using Pkg; Pkg.instantiate()'
         - julia --color=yes --project=test/coverage/ test/coverage/coverage.jl
 
