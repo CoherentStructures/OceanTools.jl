@@ -2,7 +2,7 @@
 #Constants needed for tricubic interpolation
 include("coeff.jl")
 
-@enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2
+@enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2 semiperiodic=3
 
 function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where {TA}
     n, m = size(A)
@@ -176,7 +176,7 @@ Calculates the indexes `i, j` and local coordinates corresponding to a real numb
 where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 [x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where all intervals have equal length.
 """
-@inline function getIndex(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
+@inline function getIndex(x::Float64, x0::Float64, xf::Float64, xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
@@ -191,57 +191,44 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
                 throw(BoundsError("Out of bounds access"))
         end
     else #boundary == semiperiodic
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        xpp = xindex + 1
+        if xpp >= nx || xindex < 0
+                throw(BoundsError("Out of bounds access"))
+        end
     end
     return xindex, xpp, xcoord
 end
 
-function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
+function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1), nx)
-    else # boundary == flat || boundary == outofbounds
+    elseif boundary == flat
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        xindex = max(min(xindex,nx-1,0))
+        xpp = max(min(xindex + 1,nx-1),0)
+        xpp2 = max(min(xindex + 2,nx-1),0)
+        xmm = max(min(xindex-1,nx-1),0)
+    elseif boundary == outofbounds
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
-        xmm = xindex-1
-
-        if xpp2 >= nx
-            if boundary == outofbounds
+        xmm = xindex - 1
+        if xmm < 0 || xpp2 > (nx-1)
                 throw(BoundsError("Out of bounds access"))
-            else
-                xpp2 = (nx-1)
-            end
         end
-        if xpp >= nx
-            xpp = (nx-1)
-        end
-        if xindex >= nx
-            xindex = (nx-1)
-        end
-        if xmm >= nx
-            xmm = (nx-1)
-        end
+    else #boundary == semiperiodic
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        xpp = xindex + 1
+        xpp2 = xindex + 2
+        xmm = xindex - 1
 
-        if xmm < 0
-            if boundary == outofbounds
+        if xmm < 0 || xpp2 > (nx-1)
                 throw(BoundsError("Out of bounds access"))
-            else
-                xmm = 0
-            end
-        end
-
-        if xindex < 0
-                xindex = 0
-        end
-        if xpp < 0
-            xpp = 0
-        end
-
-        if xpp2 < 0
-            xpp2 = 0
         end
     end
     return xindex, xpp, xpp2, xmm, xcoord
@@ -254,11 +241,44 @@ struct ItpMetadata{T}
     nt::Int
     LL::SVector{3,Float64}
     UR::SVector{3,Float64}
+    periods::SVector{3,Float64}
     data::T
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
     boundaryT::BoundaryBehaviour
 end
+function ItpMetadata(nx::Int, ny::Int, nt::Int,
+                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, periods::AbstractVector{Float64}, data::T,
+                    boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
+    @assert length(LL) == 3
+    @assert length(UR) == 3
+    @assert length(periods) == 3
+    if boundaryX != semiperiodic
+        @assert periods[1] == 0.0
+        @assert UR[1] > LL[1]
+    else
+        @assert periods[1] != 0
+    end
+
+    if boundaryY != semiperiodic
+        @assert periods[2] == 0.0
+        @assert UR[2] > LL[2]
+    else
+        @assert periods[2] != 0
+    end
+
+    if boundaryT != semiperiodic
+        @assert periods[3] == 0.0
+        @assert UR[3] > LL[3]
+    else
+        @assert periods[3] != 0
+    end
+
+    return ItpMetadata(nx, ny, nt,
+                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((periods[1],periods[2],periods[3])),
+                        data, boundaryX, boundaryY, boundaryT)
+end
+
 
 function ItpMetadata(nx::Int, ny::Int, nt::Int,
                     LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
@@ -266,7 +286,7 @@ function ItpMetadata(nx::Int, ny::Int, nt::Int,
     @assert length(LL) == 3
     @assert length(UR) == 3
     return ItpMetadata(nx, ny, nt,
-                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),
+                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((0.0,0.0,0.0)),
                         data, boundaryX, boundaryY, boundaryT)
 end
 @deprecate ItpMetadata(nx::Int, ny::Int, nt::Int,
@@ -290,6 +310,7 @@ struct ItpMetadata3{T}
     nt::Int
     LL::SVector{4,Float64}
     UR::SVector{4,Float64}
+    periods::SVector{4,Float64}
     data::T
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
@@ -302,8 +323,15 @@ function ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
         boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryZ::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     @assert length(LL) == 4
     @assert length(UR) == 4
+    #TODO: implement this!
+    @assert boundaryX != semiperiodic
+    @assert boundaryY != semiperiodic
+    @assert boundaryZ != semiperiodic
+
+
+
     ItpMetadata3(nx, ny, nz, nt, SVector{4}((LL[1], LL[2], LL[3], LL[4])),
-                    SVector{4}((UR[1], UR[2], UR[3], UR[4])), data,
+                    SVector{4}((UR[1], UR[2], UR[3], UR[4])), SVector{4}((0.0,0.0,0.0,0.0)), data,
                     boundaryX, boundaryY, boundaryZ, boundaryT)
 end
 @deprecate ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
@@ -340,10 +368,11 @@ function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata, t::Float64
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, pt, nt, p.boundaryT)
 
     r1u = Us[xindex + 1, yindex + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, yindex + 1, tindex + 1]*xcoord
     r2u = Us[xindex + 1, ypp + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, ypp + 1, tindex + 1]*xcoord
@@ -519,10 +548,11 @@ function _uv_tricubic(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf,pt, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -552,10 +582,11 @@ function _ssh_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:R
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -578,9 +609,9 @@ function _ssh_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
 
     res1 = base_tricubic_interpolation_gradient(xindex, yindex, tindex,
                                                 xpp, ypp, tpp,
@@ -606,10 +637,11 @@ function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3}, Us::U, Vs::U, p::ItpMetadat
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
 
     Uitp = base_tricubic_interpolation_gradient(
         xindex, yindex, tindex,
@@ -781,11 +813,12 @@ function _uv_quadlinear(u::SVector{3,T}, Us::U, Vs::U, Ws::U, p::ItpMetadata3{S}
     nx, ny, nz, nt = p.nx, p.ny, p.nz, p.nt
     ll1, ll2, ll3, t0 = p.LL
     ur1, ur2, ur3, tf = p.UR
+    px, py, pt = p.periods
 
-    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
-    zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, nz, p.boundaryZ)
-    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, py, ny, p.boundaryY)
+    zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, pz, nz, p.boundaryZ)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, pt, nt,  p.boundaryT)
 
     function singleTriLinear(what, zindex)
         r1u = what[xindex+1, yindex + 1, zindex + 1, tindex + 1]*(1 - xcoord) +

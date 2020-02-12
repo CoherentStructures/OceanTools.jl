@@ -68,7 +68,7 @@ function read_ocean_velocities(howmany, ww_ocean_data;
 
     bounds_given =  (LL_space != nothing)
 
-    LL = bounds_given ?   clone(LL_space): [Lon[1], Lat[1]] 
+    LL = bounds_given ? clone(LL_space) : [Lon[1], Lat[1]] 
     UR = bounds_given ? clone(UR_space) : [Lon[1] + 360, Lat[1] + 180]
 
     function periodicGoLeft(x::Float64,start::Float64,per::Float64)

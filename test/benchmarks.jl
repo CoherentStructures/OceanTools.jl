@@ -9,8 +9,9 @@ Random.seed!(1234)
     xf = 1.0
     nx = 123
     for boundary in instances(CopernicusUtils.BoundaryBehaviour)
-        @inferred CopernicusUtils.getIndex(x, x0, xf, nx, boundary)
-        @inferred CopernicusUtils.getIndex2(x, x0, xf, nx, boundary)
+        xper = boundary == CopernicusUtils.semiperiodic ? 3.0 : 0.0
+        @inferred CopernicusUtils.getIndex(x, x0, xf, xper, nx, boundary)
+        @inferred CopernicusUtils.getIndex2(x, x0, xf, xper, nx, boundary)
     end
     @inferred CopernicusUtils.gooddivrem(x, nx)
 end
