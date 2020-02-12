@@ -176,33 +176,21 @@ Calculates the indexes `i, j` and local coordinates corresponding to a real numb
 where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 [x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where all intervals have equal length.
 """
-@inline function getIndex(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
+@inline function getIndex(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
-    else # boundary == flat || boundary == outofbounds
+    elseif boundary == flat
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        xpp = max(min(xindex + 1,nx-1),0)
+        xindex = max(min(xindex,nx-1),0)
+    elseif boundary  == outofbounds
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
-        if xpp >= nx
-            if boundary == outofbounds
+        if xpp >= nx || xindex < 0
                 throw(BoundsError("Out of bounds access"))
-            else
-                xpp = (nx-1)
-            end
         end
-        if xindex >= nx
-            xindex = (nx-1)
-        end
-        if xindex < 0
-            if boundary == outofbounds
-                throw(BoundsError("Out of bounds access"))
-            else
-                xindex = 0
-            end
-        end
-        if xpp < 0
-            xpp = 0
-        end
+    else #boundary == semiperiodic
     end
     return xindex, xpp, xcoord
 end

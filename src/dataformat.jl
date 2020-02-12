@@ -57,25 +57,77 @@ function read_ocean_velocities(howmany, ww_ocean_data;
                                 remove_nan=true,
                                 start_date=nothing,
                                 nskip=0,
-                                arraycons=SharedArray{Float64})
+                                arraycons=SharedArray{Float64},
+                                LL_space=nothing,UR_space=nothing
+                                )
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
+    nx_full = length(Lon)
+    ny_full = length(Lat)
+
+    @assert (LL_space == nothing) == (UR_space == nothing)
+
+    bounds_given =  (LL_space != nothing)
+
+    LL = bounds_given ?   clone(LL_space): [Lon[1], Lat[1]] 
+    UR = bounds_given ? clone(UR_space) : [Lon[1] + 360, Lat[1] + 180]
+
+    function periodicGoLeft(x::Float64,start::Float64,per::Float64)
+        if start >= x
+            while start > x
+                start -= per
+            end
+        else 
+            while start < x
+                start += per
+            end
+        end
+        return start
+    end
+
+    #Indexes below are 0-based!
+
+    if bounds_given
+        llxi = getIndex(LL[1], Lon[1],Lon[1]+360,nx_full,periodic)[1]
+        llx = periodicGoLeft(LL[1], Lon[llxi],360.0)
+
+        urxi = mod(getIndex(UR[1], Lon[1],Lon[1]+360,nx_full,periodic)[1] + 1, nx_full)
+        nx_small = mod(urxi - llxi,nx_full)
+        urx = llxi + n_small*(Lon[2] - Lon[1])
+
+        llyi = getIndex(LL[2], Lat[1],Lat[1]+180,ny_full,periodic)[1]
+        lly = periodicGoLeft(LL[2], Lat[llyi],180.0)
+
+        uryi = mod(getIndex(UR[2], Lat[1],Lat[1]+180,ny_full,periodic)[1] + 1, ny_full)
+        ny_small = mod(uryi - llyi,ny_full)
+        ury = llyi + ny_small*(Lat[2] - Lat[1])
+    else
+        llxi = 0
+        llx = Lon[1]
+        urxi = nx_full
+        urx = Lon[1] + 360.0
+        nx_small = nx_full
+
+        llyi = 0
+        lly = Lat[1]
+        uryi = ny_full
+        ury = Lat[1] + 180.0
+        ny_small = ny_full
+    end
+        
     times = zeros(howmany)
+    nt = size(times)[1]
 
-    sLon = size(Lon)[1]
-    sLat = size(Lat)[1]
-    stimes = size(times)[1]
-
-    LonS = arraycons(sLon)
-    LatS = arraycons(sLat)
-    timesS = arraycons(stimes)
+    LonS = arraycons(nx_full)
+    LatS = arraycons(ny_full)
+    timesS = arraycons(nt)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    Us = arraycons(sLon, sLat, stimes)
-    Vs = arraycons(sLon, sLat, stimes)
-    Ust1S = arraycons(sLon, sLat, 1)
+    Us = arraycons(nx_full, ny_full, nt)
+    Vs = arraycons(nx_full, ny_full, nt)
+    Ust1S = arraycons(nx_full, ny_full, 1)
 
     numfound = 0
     skipped = 0
@@ -148,32 +200,32 @@ function read_ssh(howmany, ww_ocean_data;
         throw(BoundsError("Only read in $numfound sea surface heights!! (required $howmany)"))
     end
 
-    sLon = size(Lon)[1]
-    sLat = size(Lat)[1]
-    stimes = size(times)[1]
+    nx_full = size(Lon)[1]
+    ny_full = size(Lat)[1]
+    nt = size(times)[1]
 
-    LonS = arraycons(sLon)
-    LatS = arraycons(sLat)
-    timesS = arraycons(stimes)
+    LonS = arraycons(nx_full)
+    LatS = arraycons(ny_full)
+    timesS = arraycons(nt)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    sshsS = arraycons(sLon, sLat, stimes)
-    sshst1S = arraycons(sLon, sLat, 1)
+    sshsS = arraycons(nx_full, ny_full, nt)
+    sshst1S = arraycons(nx_full, ny_full, 1)
     sshsS .= sshs
     sshst1S .= sshs[:,:,1:1]
 
     if remove_nan
-        for t in 1:stimes, j in 1:sLat, i in 1:sLon
+        for t in 1:nt, j in 1:ny_full, i in 1:nx_full
             if isnan(sshsS[i,j,t])
                 sshsS[i,j,t] = 0.0
             end
         end
         #=
-        for j in 1:sLat
-            for i in 1:sLon
+        for j in 1:ny_full
+            for i in 1:nx_full
                 if isnan(sshst1S[i,j])
                         sshsA[i,j,:] .= 0
                 end
@@ -195,7 +247,7 @@ used to define boundary behaviour in (x,y,t) direction, consult the `getIndex` f
 details. The function `arraycons` is used to determine how the data should be stored (either
 `SharedArray{Float64}`, or `zeros` for a normal array).
 """
-function getP(foldername;
+function getPFull(foldername;
                 ndays=90,
                 sshs=false,
                 remove_nan=true,
@@ -227,6 +279,47 @@ function getP(foldername;
         return res_full, sshst1, (Lon, Lat, times)
     end
 end
+
+"""
+    getPPart(foldername,ndays,LL_space, UR_space, sshs=false,remove_nan=true,start_data=nothing,nskip=0,arraycons=SharedArray{Float64})
+
+Like `getPFull`, but only loads part of the dataset in space
+(specifiable via lower left corner `LL_space` and upper right corner `UR_space`). 
+"""
+function getPPart(foldername;
+                ndays=90,
+                sshs=false,
+                remove_nan=true,
+                start_date=nothing,
+                nskip=0,
+                b=(0,0,1),
+                arraycons=SharedArray{Float64})
+
+    if sshs
+        Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername;
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+        Us, Vs = nothing, nothing
+    else
+        Lon, Lat, Us, Vs, times, Ust1 = read_ocean_velocities(ndays, foldername;
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+        ssh_vals  = nothing
+    end
+    nx = length(Lon)
+    ny = length(Lat)
+    nt = length(times)
+    if !sshs
+        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
+            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
+            (Us, Vs), b[1], b[2], b[3])
+        return res_full, Ust1, (Lon, Lat, times)
+    else
+        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
+            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
+            ssh_vals, b[1], b[2], b[3])
+        return res_full, sshst1, (Lon, Lat, times)
+    end
+end
+
 
 function restrictP(full_data, UR, LL, tspan, flow, ntraj=20, safety_factor=0.2, sshs=false)
     if !sshs
