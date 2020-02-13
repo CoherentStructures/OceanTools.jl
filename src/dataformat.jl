@@ -95,14 +95,14 @@ function read_ocean_velocities(howmany, ww_ocean_data,boundary;
 
     if bounds_given
         llxi = getIndex(LL[1], Lon[1],Lon[1]+360,0.0,nx_full,periodic)[1]
-        llx = periodicGoLeft(LL[1], Lon[llxi],360.0)
+        llx = periodicGoLeft(LL[1], Lon[llxi+1],360.0)
 
         urxi = mod(getIndex(UR[1], Lon[1],Lon[1]+360,0.0,nx_full,periodic)[1] + 2, nx_full)
         nx_small = mod(urxi - llxi,nx_full)
         urx = llx + nx_small*(Lon[2] - Lon[1])
 
         llyi = getIndex(LL[2], Lat[1],Lat[1]+180,0.0,ny_full,periodic)[1]
-        lly = periodicGoLeft(LL[2], Lat[llyi],180.0)
+        lly = periodicGoLeft(LL[2], Lat[llyi+1],180.0)
 
         uryi = mod(getIndex(UR[2], Lat[1],Lat[1]+180,0.0,ny_full,periodic)[1] + 2, ny_full)
         ny_small = mod(uryi - llyi,ny_full)
