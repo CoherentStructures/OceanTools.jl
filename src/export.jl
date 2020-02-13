@@ -8,4 +8,5 @@ export
    sshVelocityRHS,
    read_ocean_velocities,
    read_ssh,
-   getP
+   getPFull,
+   getPPart
