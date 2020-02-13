@@ -57,12 +57,12 @@ function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan,lli,llj)
     end
 end
 
-function read_ocean_velocities(howmany, ww_ocean_data;
+function read_ocean_velocities(howmany, ww_ocean_data,boundary;
                                 remove_nan=true,
                                 start_date=nothing,
                                 nskip=0,
                                 arraycons=SharedArray{Float64},
-                                LL_space=nothing,UR_space=nothing
+                                LL_space=nothing,UR_space=nothing,
                                 )
     Lon32, Lat32 = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     Lon = Float64.(Lon32)
@@ -86,6 +86,7 @@ function read_ocean_velocities(howmany, ww_ocean_data;
             while start < x
                 start += per
             end
+            start -= per
         end
         return start
     end
@@ -96,16 +97,18 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         llxi = getIndex(LL[1], Lon[1],Lon[1]+360,0.0,nx_full,periodic)[1]
         llx = periodicGoLeft(LL[1], Lon[llxi],360.0)
 
-        urxi = mod(getIndex(UR[1], Lon[1],Lon[1]+360,0.0,nx_full,periodic)[1] + 1, nx_full)
+        urxi = mod(getIndex(UR[1], Lon[1],Lon[1]+360,0.0,nx_full,periodic)[1] + 2, nx_full)
         nx_small = mod(urxi - llxi,nx_full)
-        urx = llxi + nx_small*(Lon[2] - Lon[1])
+        urx = llx + nx_small*(Lon[2] - Lon[1])
 
         llyi = getIndex(LL[2], Lat[1],Lat[1]+180,0.0,ny_full,periodic)[1]
         lly = periodicGoLeft(LL[2], Lat[llyi],180.0)
 
-        uryi = mod(getIndex(UR[2], Lat[1],Lat[1]+180,0.0,ny_full,periodic)[1] + 1, ny_full)
+        uryi = mod(getIndex(UR[2], Lat[1],Lat[1]+180,0.0,ny_full,periodic)[1] + 2, ny_full)
         ny_small = mod(uryi - llyi,ny_full)
-        ury = llyi + ny_small*(Lat[2] - Lat[1])
+        ury = lly + ny_small*(Lat[2] - Lat[1])
+        perx = 360.0
+        pery = 180.0
     else
         llxi = 0
         llx = Lon[1]
@@ -118,6 +121,8 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         #uryi = ny_full-1
         ury = Lat[1] + 180.0
         ny_small = ny_full
+        perx = 0.0
+        pery = 0.0
     end
 
         
@@ -134,7 +139,7 @@ function read_ocean_velocities(howmany, ww_ocean_data;
 
     Us = arraycons(nx_small, ny_small, nt)
     Vs = arraycons(nx_small, ny_small, nt)
-    Ust1S = arraycons(nx_small, ny_small, 1)
+    Ust1 = arraycons(nx_small, ny_small, 1)
 
     numfound = 0
     skipped = 0
@@ -161,13 +166,18 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         close(d)
         times[numfound] = t
     end
+
     if numfound < howmany
         throw(BoundsError("Only read in $numfound velocities!! (required $howmany)"))
     end
 
-    Ust1S .= Us[:,:,1:1]
+    Ust1 .= Us[:,:,1:1]
 
-    return Lon, Lat, Us, Vs, times, Ust1S
+    res_full = ItpMetadata(nx_small, ny_small, nt, SVector{3}([llx, lly, times[1]]),
+            SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, pery, 0.0]),
+            (Us, Vs), boundary[1], boundary[2], boundary[3])
+
+    return Lon, Lat, Us, Vs, times, Ust1, res_full
 end
 
 function read_ssh(howmany, ww_ocean_data;
@@ -263,29 +273,25 @@ function getPFull(foldername;
                 arraycons=SharedArray{Float64},
                 boundaryT=flat)
     if sshs
-        Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername;
+        @assert !sshs
+        #TODO:fix things
+        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
+            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
+            (Us, Vs), b[1], b[2], b[3])
+
+        Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername,(periodic,periodic,boundaryT);
             remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
         Us, Vs = nothing, nothing
     else
-        Lon, Lat, Us, Vs, times, Ust1 = read_ocean_velocities(ndays, foldername;
+
+        Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(ndays, foldername,(periodic,periodic,boundaryT);
             remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
         ssh_vals  = nothing
     end
 
-    b=(periodic,periodic,boundaryT)
-
-    nx = length(Lon)
-    ny = length(Lat)
-    nt = length(times)
     if !sshs
-        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
-            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
-            (Us, Vs), b[1], b[2], b[3])
         return res_full, Ust1, (Lon, Lat, times)
     else
-        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
-            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
-            ssh_vals, b[1], b[2], b[3])
         return res_full, sshst1, (Lon, Lat, times)
     end
 end
@@ -309,28 +315,23 @@ function getPPart(foldername,LL_space,UR_space;
     b=(semiperiodic,semiperiodic,boundaryT)
 
     if sshs
-        Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername;
+        @assert !sshs
+        #TODO fix read_ssh so that the below works
+        #res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
+        #            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
+        #            ssh_vals, b[1], b[2], b[3])
+        Lon, Lat, ssh_vals, times, sshsT1, res_full = read_ssh(ndays, foldername,b;
             remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
         Us, Vs = nothing, nothing
+        return res_full, sshst1, (Lon, Lat, times)
     else
-        Lon, Lat, Us, Vs, times, Ust1 = read_ocean_velocities(ndays, foldername;LL_space=LL_space,UR_space=UR_space,
+        Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(ndays, foldername,b;
+            LL_space=LL_space,UR_space=UR_space,
             remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
         ssh_vals  = nothing
-    end
-    nx = length(Lon)
-    ny = length(Lat)
-    nt = length(times)
-    if !sshs
-        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
-            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
-            (Us, Vs), b[1], b[2], b[3])
         return res_full, Ust1, (Lon, Lat, times)
-    else
-        res_full = ItpMetadata(nx, ny, nt, SVector{3}([Lon[1], Lat[1], times[1]]),
-            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
-            ssh_vals, b[1], b[2], b[3])
-        return res_full, sshst1, (Lon, Lat, times)
     end
+        
 end
 
 

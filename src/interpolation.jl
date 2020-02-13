@@ -209,7 +209,7 @@ function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, 
         xmm = mod((xindex-1), nx)
     elseif boundary == flat
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
-        xindex = max(min(xindex,nx-1,0))
+        xindex = max(min(xindex,nx-1),0)
         xpp = max(min(xindex + 1,nx-1),0)
         xpp2 = max(min(xindex + 2,nx-1),0)
         xmm = max(min(xindex-1,nx-1),0)
@@ -246,37 +246,38 @@ struct ItpMetadata{T}
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
     boundaryT::BoundaryBehaviour
-end
-function ItpMetadata(nx::Int, ny::Int, nt::Int,
-                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, periods::AbstractVector{Float64}, data::T,
-                    boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
-    @assert length(LL) == 3
-    @assert length(UR) == 3
-    @assert length(periods) == 3
-    if boundaryX != semiperiodic
-        @assert periods[1] == 0.0
-        @assert UR[1] > LL[1]
-    else
-        @assert periods[1] != 0
+    function ItpMetadata(nx::Int, ny::Int, nt::Int,
+                        LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, periods::AbstractVector{Float64}, data::T,
+                        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
+        @assert length(LL) == 3
+        @assert length(UR) == 3
+        @assert length(periods) == 3
+        if boundaryX != semiperiodic
+            @assert periods[1] == 0.0
+            @assert UR[1] > LL[1]
+        else
+            @assert periods[1] != 0
+        end
+
+        if boundaryY != semiperiodic
+            @assert periods[2] == 0.0
+            @assert UR[2] > LL[2]
+        else
+            @assert periods[2] != 0
+        end
+
+        if boundaryT != semiperiodic
+            @assert periods[3] == 0.0
+            @assert UR[3] > LL[3]
+        else
+            @assert periods[3] != 0
+        end
+
+        return new{T}(nx, ny, nt,
+                            SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((periods[1],periods[2],periods[3])),
+                            data, boundaryX, boundaryY, boundaryT)
     end
 
-    if boundaryY != semiperiodic
-        @assert periods[2] == 0.0
-        @assert UR[2] > LL[2]
-    else
-        @assert periods[2] != 0
-    end
-
-    if boundaryT != semiperiodic
-        @assert periods[3] == 0.0
-        @assert UR[3] > LL[3]
-    else
-        @assert periods[3] != 0
-    end
-
-    return ItpMetadata(nx, ny, nt,
-                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((periods[1],periods[2],periods[3])),
-                        data, boundaryX, boundaryY, boundaryT)
 end
 
 
