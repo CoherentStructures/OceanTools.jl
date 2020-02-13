@@ -28,26 +28,26 @@ function daysSince1950(t)
     return tdays
 end
 
-function loadField(d,filename, fieldname)
+function loadField(d, filename, fieldname)
     t = d["time"][1]
     return d[fieldname][:], daysSince1950(t)
 end
 
 """
-    rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
+    rescaleUV(U, V, Lon, Lat, Us, Vs, numfound)
 
 Convert lon-lat velocities `U` and `V` from units degrees/second to kilometers/day.
 Save the result in Us[:,:,numfound] (resp. Vs[:,:,numfound])
 """
-function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan)
+function rescaleUV(U, V, Lon, Lat, Us, Vs, numfound, remove_nan)
     R = 6371e3 # radius of the Earth in kilometers
-    s =3600*24/R
+    s = 3600*24/R
     n = size(U)[1]
     m = size(U)[2]
     missing_value = remove_nan ? 0.0 : NaN
     for j in 1:m
         for i in 1:n
-            Us[i,j,numfound] = ismissing(U[i,j]) ? missing_value :  sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
+            Us[i,j,numfound] = ismissing(U[i,j]) ? missing_value : sec(deg2rad(Lat[j])) * rad2deg(U[i,j]) * s
             Vs[i,j,numfound] = ismissing(V[i,j]) ? missing_value : rad2deg(V[i,j]) * s
         end
     end
@@ -57,7 +57,7 @@ function read_ocean_velocities(howmany, ww_ocean_data;
                                 remove_nan=true,
                                 start_date=nothing,
                                 nskip=0,
-                                arraycons=SharedArray{Float64})
+                                array_ctor=SharedArray{Float64})
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
 
@@ -65,17 +65,17 @@ function read_ocean_velocities(howmany, ww_ocean_data;
     sLat = size(Lat)[1]
     stimes = size(times)[1]
 
-    LonS = arraycons(sLon)
-    LatS = arraycons(sLat)
-    timesS = arraycons(stimes)
+    LonS = array_ctor(sLon)
+    LatS = array_ctor(sLat)
+    timesS = array_ctor(stimes)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    Us = arraycons(sLon, sLat, stimes)
-    Vs = arraycons(sLon, sLat, stimes)
-    Ust1S = arraycons(sLon, sLat, 1)
+    Us = array_ctor(sLon, sLat, stimes)
+    Vs = array_ctor(sLon, sLat, stimes)
+    Ust1S = array_ctor(sLon, sLat, 1)
 
     numfound = 0
     skipped = 0
@@ -96,9 +96,9 @@ function read_ocean_velocities(howmany, ww_ocean_data;
         end
         numfound += 1
         d = NCD.Dataset(fname)
-        U, t = loadField(d,fname, "ugos")
-        V, _ = loadField(d,fname, "vgos")
-        rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan)
+        U, t = loadField(d, fname, "ugos")
+        V, _ = loadField(d, fname, "vgos")
+        rescaleUV(U, V, Lon, Lat, Us, Vs, numfound, remove_nan)
         close(d)
         times[numfound] = t
     end
@@ -115,7 +115,7 @@ function read_ssh(howmany, ww_ocean_data;
                     remove_nan=true,
                     start_date=nothing,
                     nskip=0,
-                    arraycons=SharedArray{Float64})
+                    array_ctor=SharedArray{Float64})
     Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
     times = zeros(howmany)
     sshs = zeros(length(Lon), length(Lat), howmany)
@@ -138,7 +138,7 @@ function read_ssh(howmany, ww_ocean_data;
         numfound += 1
         fname = ww_ocean_data * "/" * fname_part
         d = NCD.Dataset(fname)
-        ssh,t = loadField(d,fname, "adt")
+        ssh, t = loadField(d,fname, "adt")
         times[numfound] = t
         sshs[:,:,numfound] .= ssh
         close(d)
@@ -152,16 +152,16 @@ function read_ssh(howmany, ww_ocean_data;
     sLat = size(Lat)[1]
     stimes = size(times)[1]
 
-    LonS = arraycons(sLon)
-    LatS = arraycons(sLat)
-    timesS = arraycons(stimes)
+    LonS = array_ctor(sLon)
+    LatS = array_ctor(sLat)
+    timesS = array_ctor(stimes)
 
     LonS .= Lon
     LatS .= Lat
     timesS .= times
 
-    sshsS = arraycons(sLon, sLat, stimes)
-    sshst1S = arraycons(sLon, sLat, 1)
+    sshsS = array_ctor(sLon, sLat, stimes)
+    sshst1S = array_ctor(sLon, sLat, 1)
     sshsS .= sshs
     sshst1S .= sshs[:,:,1:1]
 
@@ -185,14 +185,14 @@ function read_ssh(howmany, ww_ocean_data;
 end
 
 """
-    getP(foldername; [ndays=90, sshs=false, remove_nan=true, start_date=nothing, nskip=0, b=(0,0,1), arraycons=SharedArray{Float64})
+    getP(foldername; [ndays=90, sshs=false, remove_nan=true, start_date=nothing, nskip=0, b=(periodic, periodic, flat), array_ctor=SharedArray{Float64})
 
 Reads in ocean velocity/sea surface height data from the files in `foldername`. Files are
 traversed in the order returned by `readdir`, and `ndays` files are read. If `start_date`
 (type DateTime) is set, only read in files with `t` field greater than or equal
 `start_date`. If `nskip` is not zero, skip `nskip` additional files. The parameter `b` is
 used to define boundary behaviour in (x,y,t) direction, consult the `getIndex` function for
-details. The function `arraycons` is used to determine how the data should be stored (either
+details. The function `array_ctor` is used to determine how the data should be stored (either
 `SharedArray{Float64}`, or `zeros` for a normal array).
 """
 function getP(foldername;
@@ -201,15 +201,15 @@ function getP(foldername;
                 remove_nan=true,
                 start_date=nothing,
                 nskip=0,
-                b=(0,0,1),
-                arraycons=SharedArray{Float64})
+                b=(periodic, periodic, flat),
+                array_ctor=SharedArray{Float64})
     if sshs
         Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername;
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, array_ctor=array_ctor)
         Us, Vs = nothing, nothing
     else
         Lon, Lat, Us, Vs, times, Ust1 = read_ocean_velocities(ndays, foldername;
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, array_ctor=array_ctor)
         ssh_vals  = nothing
     end
     nx = length(Lon)
