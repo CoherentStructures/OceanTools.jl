@@ -2,7 +2,7 @@ using  Distributed, Tensors, StaticArrays, Statistics, Plots, BenchmarkTools
 addprocs(3)
 
 import CoherentStructures
-using CopernicusUtils
+using OceanTools
 
 print("Reading in Copernicus data...\n")
 ww_ocean_data = "/media/public/schillna/ocean1/worldwide_ocean_data/"

@@ -4,10 +4,10 @@ end
 
 ENV["GKSwstype"] = "100"
 
-using Documenter, CopernicusUtils
+using Documenter, OceanTools
 
 makedocs(
-    sitename="CopernicusUtils.jl",
+    sitename="OceanTools.jl",
     pages = Any[
         "Home" => "index.md"
         "Example usage" => "example.md"
@@ -15,5 +15,5 @@ makedocs(
     )
 
 deploydocs(
-    repo = "github.com/CoherentStructures/CopernicusUtils.jl.git"
+    repo = "github.com/CoherentStructures/OceanTools.jl.git"
 )

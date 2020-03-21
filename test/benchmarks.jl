@@ -1,4 +1,4 @@
-using Test, CopernicusUtils
+using Test, OceanTools
 using Random, StaticArrays, BenchmarkTools
 
 Random.seed!(1234)
@@ -8,11 +8,11 @@ Random.seed!(1234)
     x0 = 0.0
     xf = 1.0
     nx = 123
-    for boundary in instances(CopernicusUtils.BoundaryBehaviour)
-        @inferred CopernicusUtils.getIndex(x, x0, xf, nx, boundary)
-        @inferred CopernicusUtils.getIndex2(x, x0, xf, nx, boundary)
+    for boundary in instances(OceanTools.BoundaryBehaviour)
+        @inferred OceanTools.getIndex(x, x0, xf, nx, boundary)
+        @inferred OceanTools.getIndex2(x, x0, xf, nx, boundary)
     end
-    @inferred CopernicusUtils.gooddivrem(x, nx)
+    @inferred OceanTools.gooddivrem(x, nx)
 end
 
 @testset "zero allocations" begin
@@ -20,7 +20,7 @@ end
     yspan = range(0, stop=10.0, length=123)
     tspan = range(0, stop=10.0, length=123)
 
-    oob = CopernicusUtils.outofbounds
+    oob = OceanTools.outofbounds
 
     fu(x,y,t) = 3*x^2 + x + 2*y + π*t + 2*x*y + exp(1)*t^2  + x^2*t
     fv(x,y,t) = fu(y,x,t)
@@ -28,7 +28,7 @@ end
     U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
     V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-    metadata = @inferred CopernicusUtils.ItpMetadata(
+    metadata = @inferred OceanTools.ItpMetadata(
                   length(xspan), length(yspan), length(tspan),
                   (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
                   (@SVector [maximum(xspan)+step(xspan),maximum(yspan)+step(yspan),maximum(tspan)+step(tspan)]),
