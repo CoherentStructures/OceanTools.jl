@@ -7,12 +7,17 @@ function loadEarthMap(nat_earth_path)
     return natearth, nLon, nLat
 end
 
-function getLonLat(filename)
-    d = NCD.Dataset(filename)
-    lon = NCD.nomissing(d["longitude"][:], NaN)[:]
-    lat = NCD.nomissing(d["latitude"][:], NaN)[:]
-    close(d)
-    return lon, lat
+function getLonLat(foldername,schema)
+    for filename in readdir(foldername)
+        if match(filename, schema) != nothing
+            d = NCD.Dataset(foldername * "/" * filename)
+            lon = NCD.nomissing(d["longitude"][:], NaN)[:]
+            lat = NCD.nomissing(d["latitude"][:], NaN)[:]
+            close(d)
+            return Float64.(lon), Float64.(lat)
+        end
+    end
+    throw(AssertionError("No file matching $schema found in $foldername"))
 end
 
 function getTime(filename)
@@ -57,16 +62,12 @@ function rescaleUV(U, V, Lon, Lat,Us,Vs,numfound,remove_nan,lli,llj)
     end
 end
 
-function read_ocean_velocities(howmany, ww_ocean_data,boundary;
-                                remove_nan=true,
-                                start_date=nothing,
-                                nskip=0,
-                                arraycons=SharedArray{Float64},
+function read_ocean_velocities(ww_ocean_data,schema,start_date,end_date,boundary;
                                 LL_space=nothing,UR_space=nothing,
+                                remove_nan=true,
+                                arraycons=SharedArray{Float64},
                                 )
-    Lon32, Lat32 = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
-    Lon = Float64.(Lon32)
-    Lat = Float64.(Lat32)
+    Lon, Lat = getLonLat(ww_ocean_data,schema)
     nx_full = length(Lon)
     ny_full = length(Lat)
 
@@ -126,38 +127,36 @@ function read_ocean_velocities(howmany, ww_ocean_data,boundary;
     end
 
         
-    times = zeros(howmany)
-    nt = size(times)[1]
+    nt = round(Int,end_date - start_date)
+    times = arraycons(nt)
 
     LonS = arraycons(nx_full)
     LatS = arraycons(ny_full)
-    timesS = arraycons(nt)
 
     LonS .= Lon
     LatS .= Lat
-    timesS .= times
 
     Us = arraycons(nx_small, ny_small, nt)
     Vs = arraycons(nx_small, ny_small, nt)
     Ust1 = arraycons(nx_small, ny_small, 1)
 
-    numfound = 0
-    skipped = 0
     for fname_part in readdir(ww_ocean_data)
+        m = match(fname_part,schema)
+        (m == nothing) && continue
         fname = ww_ocean_data * "/" * fname_part
-        if start_date !== nothing
-            if getTime(fname) < start_date
-                continue
-            end
-        end
 
-        if skipped < nskip
-            skipped += 1
+        file_date = DateTime(m.matches[1],m.matches[2],m.matches[3])
+        file_days_since_1950 = daysSince1950(file_date)
+
+        #TODO: do we want to introduce a safety buffer to the left/right?
+        if file_days_since_1950 < start_date
             continue
         end
-        if numfound >= howmany
+
+        if file_days_since_1950 > end_date
             break
         end
+
         numfound += 1
         d = NCD.Dataset(fname)
         U, t = loadField(d,fname, "ugos")
@@ -167,7 +166,7 @@ function read_ocean_velocities(howmany, ww_ocean_data,boundary;
         times[numfound] = t
     end
 
-    if numfound < howmany
+    if numfound != nt
         throw(BoundsError("Only read in $numfound velocities!! (required $howmany)"))
     end
 
@@ -177,15 +176,16 @@ function read_ocean_velocities(howmany, ww_ocean_data,boundary;
             SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, pery, 0.0]),
             (Us, Vs), boundary[1], boundary[2], boundary[3])
 
-    return Lon, Lat, Us, Vs, times, Ust1, res_full
+
+        return res_full, Ust1, (Lon, Lat, times)
 end
 
-function read_ssh(howmany, ww_ocean_data;
+function read_ssh(howmany, ww_ocean_data,schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$";
                     remove_nan=true,
                     start_date=nothing,
                     nskip=0,
                     arraycons=SharedArray{Float64})
-    Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
+    Lon, Lat = getLonLat(ww_ocean_data,schema)
     times = zeros(howmany)
     sshs = zeros(length(Lon), length(Lat), howmany)
     numfound = 0
@@ -223,11 +223,10 @@ function read_ssh(howmany, ww_ocean_data;
 
     LonS = arraycons(nx_full)
     LatS = arraycons(ny_full)
-    timesS = arraycons(nt)
+    times = arraycons(nt)
 
     LonS .= Lon
     LatS .= Lat
-    timesS .= times
 
     sshsS = arraycons(nx_full, ny_full, nt)
     sshst1S = arraycons(nx_full, ny_full, 1)
@@ -250,7 +249,7 @@ function read_ssh(howmany, ww_ocean_data;
         end
         =#
     end
-    return LonS, LatS, sshsS, timesS, sshst1S
+    return LonS, LatS, sshsS, times, sshst1S
 end
 
 """
@@ -264,11 +263,10 @@ used to define boundary behaviour in (x,y,t) direction, consult the `getIndex` f
 details. The function `arraycons` is used to determine how the data should be stored (either
 `SharedArray{Float64}`, or `zeros` for a normal array).
 """
-function getPFull(foldername;
-                ndays=90,
+function getPFull(foldername,start_date,end_date;
+                schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$",
                 sshs=false,
                 remove_nan=true,
-                start_date=nothing,
                 nskip=0,
                 arraycons=SharedArray{Float64},
                 boundaryT=flat)
@@ -284,8 +282,8 @@ function getPFull(foldername;
         Us, Vs = nothing, nothing
     else
 
-        Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(ndays, foldername,(periodic,periodic,boundaryT);
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+        return read_ocean_velocities(foldername,schema,start_date=start_date, end_date=end_date, (periodic,periodic,boundaryT);
+            remove_nan=remove_nan, arraycons=arraycons)
         ssh_vals  = nothing
     end
 
@@ -302,11 +300,12 @@ end
 Like `getPFull`, but only loads part of the dataset in space
 (specifiable via lower left corner `LL_space` and upper right corner `UR_space`). 
 """
-function getPPart(foldername,LL_space,UR_space;
+function getPPart(foldername,
+                schema,
+                start_date, end_date, LL_space,UR_space;
                 ndays=90,
                 sshs=false,
                 remove_nan=true,
-                start_date=nothing,
                 nskip=0,
                 arraycons=SharedArray{Float64},
                 boundaryT=flat)
@@ -325,9 +324,9 @@ function getPPart(foldername,LL_space,UR_space;
         Us, Vs = nothing, nothing
         return res_full, sshst1, (Lon, Lat, times)
     else
-        Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(ndays, foldername,b;
+        Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(foldername,schema,start_date=start_date, end_date=end_date, b;
             LL_space=LL_space,UR_space=UR_space,
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+            remove_nan=remove_nan, arraycons=arraycons)
         ssh_vals  = nothing
         return res_full, Ust1, (Lon, Lat, times)
     end
