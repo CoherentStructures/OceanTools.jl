@@ -13,7 +13,8 @@ Utilities for working with certain [Copernicus](http://marine.copernicus.eu/) Da
 FTLE field for a 90 day period off the coast of Japan.
 
 <p align="center">
-    <img src="https://cdn.rawgit.com/CoherentStructures/OceanTools.jl/60b1c26c/examples/ftle_plot.jpg"/>
+    <img src="
+https://raw.githubusercontent.com/CoherentStructures/OceanTools.jl/master/examples/ftle_plot.jpg"/>
 </p>
 
 # Misc
