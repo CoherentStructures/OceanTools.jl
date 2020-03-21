@@ -3,7 +3,6 @@
 [![codecov](https://codecov.io/gh/CoherentStructures/OceanTools.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/CoherentStructures/OceanTools.jl)
 
 This package was previously known as `CopernicusUtils.jl`.
-
 Utilities for working with certain [Copernicus](http://marine.copernicus.eu/) Datasets. This package can be used (amongst other things) to generate large test cases to use with [CoherentStructures.jl](https://github.com/CoherentStructures/CoherentStructures.jl).
 
 # Documentation
