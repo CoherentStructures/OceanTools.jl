@@ -1,5 +1,5 @@
 using Test
-using CopernicusUtils
+using OceanTools
 
 include("exactness.jl")
 

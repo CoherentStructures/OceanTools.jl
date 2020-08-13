@@ -33,13 +33,13 @@ function daysSince1950(t)
     return tdays
 end
 
-function loadField(d,filename, fieldname)
+function loadField(d, filename, fieldname)
     t = d["time"][1]
     return d[fieldname][:], daysSince1950(t)
 end
 
 """
-    rescaleUV(U, V, Lon, Lat,Us,Vs,numfound)
+    rescaleUV(U, V, Lon, Lat, Us, Vs, numfound)
 
 Convert lon-lat velocities `U` and `V` from units degrees/second to kilometers/day.
 Save the result in Us[:,:,numfound] (resp. Vs[:,:,numfound])
@@ -65,14 +65,13 @@ end
 function read_ocean_velocities(ww_ocean_data,schema,start_date,end_date,boundary;
                                 LL_space=nothing,UR_space=nothing,
                                 remove_nan=true,
-                                arraycons=SharedArray{Float64},
+                                array_ctor=SharedArray{Float64},
                                 )
     Lon, Lat = getLonLat(ww_ocean_data,schema)
     nx_full = length(Lon)
     ny_full = length(Lat)
 
     @assert (LL_space == nothing) == (UR_space == nothing)
-
     bounds_given =  (LL_space != nothing)
 
     LL = bounds_given ? copy(LL_space) : [Lon[1], Lat[1]] 
@@ -128,17 +127,13 @@ function read_ocean_velocities(ww_ocean_data,schema,start_date,end_date,boundary
 
         
     nt = round(Int,end_date - start_date)
-    times = arraycons(nt)
+    times = array_ctor(nt)
 
-    LonS = arraycons(nx_full)
-    LatS = arraycons(ny_full)
-
-    LonS .= Lon
-    LatS .= Lat
-
-    Us = arraycons(nx_small, ny_small, nt)
-    Vs = arraycons(nx_small, ny_small, nt)
-    Ust1 = arraycons(nx_small, ny_small, 1)
+    LonS = array_ctor(nx_full)
+    LatS = array_ctor(ny_full)
+    Us = array_ctor(nx_small, ny_small, nt)
+    Vs = array_ctor(nx_small, ny_small, nt)
+    Ust1 = array_ctor(nx_small, ny_small, 1)
 
     for fname_part in readdir(ww_ocean_data)
         m = match(fname_part,schema)
@@ -184,8 +179,12 @@ function read_ssh(howmany, ww_ocean_data,schema=r"^nrt_global_allsat_phy_l4_([0-
                     remove_nan=true,
                     start_date=nothing,
                     nskip=0,
-                    arraycons=SharedArray{Float64})
+                    array_ctor=SharedArray{Float64})
     Lon, Lat = getLonLat(ww_ocean_data,schema)
+=======
+                    array_ctor=SharedArray{Float64})
+    Lon, Lat = getLonLat(ww_ocean_data * "/" * readdir(ww_ocean_data)[1])
+>>>>>>> master
     times = zeros(howmany)
     sshs = zeros(length(Lon), length(Lat), howmany)
     numfound = 0
@@ -207,7 +206,7 @@ function read_ssh(howmany, ww_ocean_data,schema=r"^nrt_global_allsat_phy_l4_([0-
         numfound += 1
         fname = ww_ocean_data * "/" * fname_part
         d = NCD.Dataset(fname)
-        ssh,t = loadField(d,fname, "adt")
+        ssh, t = loadField(d,fname, "adt")
         times[numfound] = t
         sshs[:,:,numfound] .= ssh
         close(d)
@@ -221,15 +220,15 @@ function read_ssh(howmany, ww_ocean_data,schema=r"^nrt_global_allsat_phy_l4_([0-
     ny_full = size(Lat)[1]
     nt = size(times)[1]
 
-    LonS = arraycons(nx_full)
-    LatS = arraycons(ny_full)
-    times = arraycons(nt)
+    LonS = array_ctor(nx_full)
+    LatS = array_ctor(ny_full)
+    times = array_ctor(nt)
 
     LonS .= Lon
     LatS .= Lat
 
-    sshsS = arraycons(nx_full, ny_full, nt)
-    sshst1S = arraycons(nx_full, ny_full, 1)
+    sshsS = array_ctor(nx_full, ny_full, nt)
+    sshst1S = array_ctor(nx_full, ny_full, 1)
     sshsS .= sshs
     sshst1S .= sshs[:,:,1:1]
 
@@ -253,14 +252,14 @@ function read_ssh(howmany, ww_ocean_data,schema=r"^nrt_global_allsat_phy_l4_([0-
 end
 
 """
-    getP(foldername; [ndays=90, sshs=false, remove_nan=true, start_date=nothing, nskip=0, b=(0,0,1), arraycons=SharedArray{Float64})
+    getP(foldername; [ndays=90, sshs=false, remove_nan=true, start_date=nothing, nskip=0, b=(periodic, periodic, flat), array_ctor=SharedArray{Float64})
 
 Reads in ocean velocity/sea surface height data from the files in `foldername`. Files are
 traversed in the order returned by `readdir`, and `ndays` files are read. If `start_date`
 (type DateTime) is set, only read in files with `t` field greater than or equal
 `start_date`. If `nskip` is not zero, skip `nskip` additional files. The parameter `b` is
 used to define boundary behaviour in (x,y,t) direction, consult the `getIndex` function for
-details. The function `arraycons` is used to determine how the data should be stored (either
+details. The function `array_ctor` is used to determine how the data should be stored (either
 `SharedArray{Float64}`, or `zeros` for a normal array).
 """
 function getPFull(foldername,start_date,end_date;
@@ -268,7 +267,7 @@ function getPFull(foldername,start_date,end_date;
                 sshs=false,
                 remove_nan=true,
                 nskip=0,
-                arraycons=SharedArray{Float64},
+                array_ctor=SharedArray{Float64},
                 boundaryT=flat)
     if sshs
         @assert !sshs
@@ -278,12 +277,12 @@ function getPFull(foldername,start_date,end_date;
             (Us, Vs), b[1], b[2], b[3])
 
         Lon, Lat, ssh_vals, times, sshsT1 = read_ssh(ndays, foldername,(periodic,periodic,boundaryT);
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, array_ctor=array_ctor)
         Us, Vs = nothing, nothing
     else
 
         return read_ocean_velocities(foldername,schema,start_date=start_date, end_date=end_date, (periodic,periodic,boundaryT);
-            remove_nan=remove_nan, arraycons=arraycons)
+            remove_nan=remove_nan, array_ctor=array_ctor)
         ssh_vals  = nothing
     end
 
@@ -295,7 +294,7 @@ function getPFull(foldername,start_date,end_date;
 end
 
 """
-    getPPart(foldername,ndays,LL_space, UR_space, sshs=false,remove_nan=true,start_data=nothing,nskip=0,arraycons=SharedArray{Float64})
+    getPPart(foldername,ndays,LL_space, UR_space, sshs=false,remove_nan=true,start_data=nothing,nskip=0,array_ctor=SharedArray{Float64})
 
 Like `getPFull`, but only loads part of the dataset in space
 (specifiable via lower left corner `LL_space` and upper right corner `UR_space`). 
@@ -307,7 +306,7 @@ function getPPart(foldername,
                 sshs=false,
                 remove_nan=true,
                 nskip=0,
-                arraycons=SharedArray{Float64},
+                array_ctor=SharedArray{Float64},
                 boundaryT=flat)
 
 
@@ -320,13 +319,13 @@ function getPPart(foldername,
         #            SVector{3}([360.0 + Lon[1], 180.0 + Lat[1], times[end] + times[2] - times[1]]),
         #            ssh_vals, b[1], b[2], b[3])
         Lon, Lat, ssh_vals, times, sshsT1, res_full = read_ssh(ndays, foldername,b;
-            remove_nan=remove_nan, start_date=start_date, nskip=nskip, arraycons=arraycons)
+            remove_nan=remove_nan, start_date=start_date, nskip=nskip, array_ctor=array_ctor)
         Us, Vs = nothing, nothing
         return res_full, sshst1, (Lon, Lat, times)
     else
         Lon, Lat, Us, Vs, times, Ust1, res_full = read_ocean_velocities(foldername,schema,start_date=start_date, end_date=end_date, b;
             LL_space=LL_space,UR_space=UR_space,
-            remove_nan=remove_nan, arraycons=arraycons)
+            remove_nan=remove_nan, array_ctor=array_ctor)
         ssh_vals  = nothing
         return res_full, Ust1, (Lon, Lat, times)
     end

@@ -1,4 +1,4 @@
-module CopernicusUtils
+module OceanTools
 
     using Tensors, StaticArrays, SparseArrays, SharedArrays
 

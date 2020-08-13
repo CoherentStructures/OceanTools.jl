@@ -1,10 +1,10 @@
-# CopernicusUtils.jl
+# OceanTools.jl
 
 *Utilities for working with the Copernicus Ocean Datasets in Julia*
 
 # Introduction
 
-The CopernicusUtils.jl package provides a handful of helper functions to work with
+The OceanTools.jl package provides a handful of helper functions to work with
 `SEALEVEL_GLO_PHY_L4_NRT_OBSERVATIONS` data from [Copernicus](http://marine.copernicus.eu/) in Julia.
 These are written to be
    * as fast as possible
@@ -17,7 +17,7 @@ This package was developed by Nathanael Schilling at TUM.
 
 Run the following in the Julia REPL:
 
-    ]add https://github.com/CoherentStructures/CopernicusUtils.jl.git
+    ]add https://github.com/CoherentStructures/OceanTools.jl.git
 
 # Disclaimer
 
@@ -25,7 +25,7 @@ These functions have not been tested in detail and probably have bugs. The autho
 
 # Features
 
-The `CopernicusUtils.jl` package provides julia utilities for reading in velocity and sea surface heights (ssh) from Copernicus datasets.
+The `OceanTools.jl` package provides julia utilities for reading in velocity and sea surface heights (ssh) from Copernicus datasets.
 This functionality relies on the [`NetCDF.jl`](https://github.com/JuliaGeo/NetCDF.jl) package.
 
 There are also functions for interpolating the resulting values (trilinear + tricubic).
