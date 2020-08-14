@@ -48,6 +48,6 @@ where:
 
 *  $h$ -- sea-surface height.
 
-Here, $A(y) = g/R^2 2 \Omega \sin y \cos y$  with $g$ the gravitational constant, $R$ the radius of the earth, $\Omega$ is the earth's mean angular velocity. This equation is implemented in the `sshVelocityRHS` function.
+Here, $A(y) = g/R^2 2 \Omega \sin y \cos y$  with $g$ the gravitational constant, $R$ the radius of the earth, $\Omega$ is the earth's mean angular velocity. This equation is implemented in the `ssh_rhs` function.
 
 For a list of functions that are implemented by this package, consult the exports.jl file or the source code.
