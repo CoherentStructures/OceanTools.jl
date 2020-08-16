@@ -5,6 +5,12 @@
 This package was previously known as `CopernicusUtils.jl`.
 Utilities for working with certain [Copernicus](http://marine.copernicus.eu/) Datasets. This package can be used (amongst other things) to generate large test cases to use with [CoherentStructures.jl](https://github.com/CoherentStructures/CoherentStructures.jl).
 
+# Main features
+
+Ability to load velocity fields of arbitrary space-time cubes from Copernicus CMES data files. 
+
+Fast, allocation free interpolation on regular grids supporting periodic boundaries.
+
 # Documentation
 [![][docs-dev-img]][docs-dev-url]
 
@@ -14,6 +20,11 @@ FTLE field for a 90 day period off the coast of Japan.
 
 <p align="center">
     <img src="https://raw.githubusercontent.com/CoherentStructures/OceanTools.jl/master/examples/ftle_plot.jpg"/>
+</p>
+
+Calculating ``material barriers'' on freely choosable domain, more details in the corresponding [documentation page](https://coherentstructures.github.io/OceanTools.jl/dev/example/) :
+<p align="center">
+<img src="https://github.com/natschil/misc/raw/master/images/oceantools3.png"/>
 </p>
 
 # Misc
