@@ -26,7 +26,7 @@ jobs:
       julia: 1
       os: linux
       script:
-        - julia --color=yes --project=docs/ -e 'using Pkg; Pkg.add("Documenter"); Pkg.add(PackageSpec(path=pwd())); Pkg.instantiate()'
+        - julia --color=yes --project=docs/ -e 'using Pkg; Pkg.add("Documenter");Pkg.add("ForwardDiff"); Pkg.add(PackageSpec(path=pwd())); Pkg.instantiate()'
         - julia --color=yes --project=docs/ docs/make.jl
       after_success: skip
         - julia --color=yes --project=test/coverage/ -e 'using Pkg; Pkg.instantiate()'
