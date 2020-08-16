@@ -178,28 +178,32 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 """
 @inline function getIndex(x::Float64, x0::Float64, xf::Float64, xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
-        spacing = (xf-x0)/nx
-        xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
-        xcoord /= spacing
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
     elseif boundary == flat
-        spacing = (xf-x0)/nx
-        xindex, xcoord = gooddivrem(x-x0, spacing)
-        xcoord /= spacing
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = max(min(xindex + 1,nx-1),0)
         xindex = max(min(xindex,nx-1),0)
     elseif boundary  == outofbounds
-        spacing = (xf - x0)/nx
-        xindex, xcoord = gooddivrem(x-x0, spacing)
-        xcoord /= spacing
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         if xpp >= nx || xindex < 0
                 error("Out of bounds access at coordinate $x")
         end
     else #boundary == semiperiodic
-        spacing = mod(xf-x0,xper)/nx
-        xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
-        xcoord /= spacing
+        #spacing = mod(xf-x0,xper)/nx
+        #xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
         xpp = xindex + 1
         if xpp >= nx || xindex < 0
                 error("Out of bounds access at coordinate $x")
@@ -215,25 +219,28 @@ Like `getIndex`, but also gives back one more set of points to the right/left.
 """
 function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
-        spacing = (xf-x0)/nx
-        xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
-        xcoord /= spacing
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1), nx)
     elseif boundary == flat
-        spacing = (xf - x0)/nx
-        xindex, xcoord = gooddivrem(x-x0, spacing)
-        xcoord /= spacing
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xindex = max(min(xindex,nx-1),0)
         xpp = max(min(xindex + 1,nx-1),0)
         xpp2 = max(min(xindex + 2,nx-1),0)
         xmm = max(min(xindex-1,nx-1),0)
     elseif boundary == outofbounds
-        spacing = (xf - x0)/nx
-        xindex, xcoord = gooddivrem(x-x0, spacing)
-        xcoord /= spacing
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex - 1
@@ -241,9 +248,10 @@ function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, 
                 error("Out of bounds access at coordinate $x")
         end
     else #boundary == semiperiodic
-        spacing = mod(xf-x0,xper)/nx
-        xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
-        xcoord /= spacing
+        #spacing = mod(xf-x0,xper)/nx
+        #xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex - 1
@@ -308,27 +316,19 @@ struct ItpMetadata{T}
 end
 
 
-function ItpMetadata(nx::Int, ny::Int, nt::Int,
-                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
-                    boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
-    @assert length(LL) == 3
-    @assert length(UR) == 3
-    return ItpMetadata(nx, ny, nt,
-                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((0.0,0.0,0.0)),
-                        data, boundaryX, boundaryY, boundaryT)
-end
 @deprecate ItpMetadata(nx::Int, ny::Int, nt::Int,
                     LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
                     boundaryX::Int, boundaryY::Int, boundaryT::Int
-                    ) where {T} ItpMetadata(nx, ny, nt, LL, UR, data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+                    ) where {T} ItpMetadata(nx, ny, nt, LL, UR,SVector{3}((0.0,0.0,0.0)), data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+
 function ItpMetadata(xspan::AbstractRange, yspan::AbstractRange, tspan::AbstractRange, data::T,
-        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
+        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour; periods=SVector{3}((0.0,0.0,0.0))) where {T}
     nx = length(xspan)
     ny = length(yspan)
     nt = length(tspan)
     LL = SVector{3}((minimum(xspan), minimum(yspan), minimum(tspan)))
     UR = SVector{3}((maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)))
-    return ItpMetadata(nx, ny, nt, LL, UR, data, boundaryX, boundaryY, boundaryT)
+    return ItpMetadata(nx, ny, nt, LL, UR, periods, data, boundaryX, boundaryY, boundaryT)
 end
 
 #For 4D interpolation

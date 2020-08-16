@@ -2,7 +2,6 @@ using Test, OceanTools, Random, StaticArrays
 
 Random.seed!(1234)
 
-oob = OceanTools.outofbounds
 
 @testset "exact_on_quadratic" begin
     xspan = range(0, stop=10.0, length=123)
@@ -10,15 +9,17 @@ oob = OceanTools.outofbounds
     tspan = range(0, stop=10.0, length=123)
 
     myfuncs = ((x,y,t) -> 3*x^2 + x + 2*y + π*t + 2*x*y + exp(1)*t^2  + x^2*t, (x,y,t) -> x*y*t)
-
-    for fu in myfuncs
+    oob = OceanTools.outofbounds
+    bmodes = [oob, OceanTools.periodic,OceanTools.semiperiodic, OceanTools.flat]
+    for fu in myfuncs, b in bmodes
         fv(x,y,t) = fu(y,x,t)
 
         U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
-
+        perx = (b == OceanTools.semiperiodic) ? 20 : 0.0
         metadata = @inferred OceanTools.ItpMetadata(xspan, yspan, tspan,
-             (U, V), oob, oob, oob)
+             (U, V), b, oob, oob; periods=(@SVector [perx, 0.0,0.0]))
+
 
         for i in 1:5000
             x, y, t = rand(3)
@@ -32,7 +33,13 @@ oob = OceanTools.outofbounds
             t *= 5.0
             t += 3.0
 
-            curpt = @SVector [x,y]
+            if b == OceanTools.semiperiodic
+                continue
+                #curpt = @SVector [x + 20*(rand(Int)%5),y]
+                curpt = @SVector [x,y]
+            else
+                curpt = @SVector [x,y]
+            end
             res2 =  uv_tricubic(curpt, metadata, t)
 
             @test res2[1] ≈ fu(x,y,t) rtol=2e-14
