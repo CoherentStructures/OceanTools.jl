@@ -65,6 +65,8 @@ However, evaluating at an x-coordinate of 180 would raise an error.
 So far, only quad-linear interpolation is supported.
 
 ```@docs
+uv_quadlinear
 ```
+This function has not been extensively tested/used.
 
 

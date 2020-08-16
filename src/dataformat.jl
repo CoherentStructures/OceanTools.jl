@@ -272,8 +272,8 @@ function read_ocean_velocities(foldername,start_date::Dates.DateTime,end_date::D
     bounds_given::Bool =  (LL_space != nothing)
 
 
-    LL = bounds_given ? copy(LL_space) : [Lon[1], Lat[1]] 
-    UR = bounds_given ? copy(UR_space) : [Lon[1] + 360, Lat[1] + 180]
+    LL = bounds_given ? (1.0 .* copy(LL_space)) : [Lon[1], Lat[1]] 
+    UR = bounds_given ? (1.0 .* copy(UR_space)) : [Lon[1] + 360, Lat[1] + 180]
 
     llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
 
@@ -402,8 +402,8 @@ function read_ocean_scalars(foldername,start_date::Dates.DateTime,end_date::Date
     @assert (LL_space == nothing) == (UR_space == nothing)
     bounds_given::Bool =  (LL_space != nothing)
 
-    LL = bounds_given ? copy(LL_space) : [Lon[1], Lat[1]] 
-    UR = bounds_given ? copy(UR_space) : [Lon[1] + 360, Lat[1] + 180]
+    LL = bounds_given ? (1.0 .* copy(LL_space)) : [Lon[1], Lat[1]] 
+    UR = bounds_given ? (1.0 .* copy(UR_space)) : [Lon[1] + 360, Lat[1] + 180]
 
 
     llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)

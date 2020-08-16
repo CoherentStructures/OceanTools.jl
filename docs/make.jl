@@ -10,9 +10,9 @@ makedocs(
     sitename="OceanTools.jl",
     pages = Any[
         "Home" => "index.md"
-        "Interpolation" => "interpolation.md"
         "Loading NetCDF datafiles" => "loading_data.md"
-        "Example usage" => "example.md"
+        "Interpolation" => "interpolation.md"
+        "Example" => "example.md"
     ]
     )
 
