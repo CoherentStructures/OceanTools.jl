@@ -1,6 +1,6 @@
 name = "OceanTools"
 uuid = "5932ac79-7afd-4f39-b5ed-59687fe9b087"
-version = "v1.0.1"
+version = "v2.0.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
