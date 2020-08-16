@@ -9,8 +9,9 @@ Random.seed!(1234)
     xf = 1.0
     nx = 123
     for boundary in instances(OceanTools.BoundaryBehaviour)
-        @inferred OceanTools.getIndex(x, x0, xf, nx, boundary)
-        @inferred OceanTools.getIndex2(x, x0, xf, nx, boundary)
+        xper = boundary == OceanTools.semiperiodic ? 3.0 : 0.0
+        @inferred OceanTools.getIndex(x, x0, xf, xper, nx, boundary)
+        @inferred OceanTools.getIndex2(x, x0, xf, xper, nx, boundary)
     end
     @inferred OceanTools.gooddivrem(x, nx)
 end
@@ -28,16 +29,14 @@ end
     U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
     V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-    metadata = @inferred OceanTools.ItpMetadata(
-                  length(xspan), length(yspan), length(tspan),
-                  (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
-                  (@SVector [maximum(xspan)+step(xspan),maximum(yspan)+step(yspan),maximum(tspan)+step(tspan)]),
+    metadata = @inferred OceanTools.ItpMetadata(xspan,yspan,tspan,
                   (U,V), oob, oob, oob)
 
     curpt = SVector{2}(10rand(2))
     t = 10rand()
     @benchmark uv_tricubic($curpt, $metadata, $t)
     @benchmark uv_trilinear($curpt, $metadata, $t)
+    curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
 
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)
@@ -51,4 +50,19 @@ end
     b = @benchmarkable uv_tricubic($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
+
+    b = @benchmarkable scalar_tricubic($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+    b = @benchmarkable uv_tricubic_eqvari($curmat, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+    b = @benchmarkable scalar_tricubic_gradient($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+
+
 end

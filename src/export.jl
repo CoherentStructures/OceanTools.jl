@@ -2,10 +2,9 @@ export
    uv_trilinear,
    uv_tricubic,
    uv_quadlinear,
-   ssh_tricubic,
-   ssh_tricubic_gradient,
+   scalar_tricubic,
+   scalar_tricubic_gradient,
    uv_tricubic_eqvari,
-   sshVelocityRHS,
+   ssh_rhs,
    read_ocean_velocities,
-   read_ssh,
-   getP
+   read_ocean_scalars

@@ -1,27 +1,101 @@
-# Example Usage
+# Example
+
+In this example, we use the [CoherentStructures.jl](https://github.com/CoherentStructures/CoherentStructures.jl) package
+to work with some data derived from satelite altimetry. As is usual for julia, this will take much longer than normal to run the first time 
+as things are being compiled.
+
+For the sake of simplicity we will restrict ourselves to the case of only a single worker, but parallelising is straightforward.
+
+## Getting the data
+
+Download velocity fields from [Copernicus CMES](https://resources.marine.copernicus.eu/?option=com_csw&view=details&product_id=SEALEVEL_GLO_PHY_L4_NRT_OBSERVATIONS_008_046); after having made an account click on "Download", then "Download Options" and then use the "FTP Access" to download the files you want.
+
+
+In our case, the files we will use `/foo/ww_ocean_data`, an example filename is `dt_global_allsat_phy_l4_20070414_20190101.nc`.
+Make sure that the `filename_match_to_date` function fits with the regular expression you use to find the right file.
+
+## Loading the data
+
+We start by loading some packages
+
+```julia
+using OceanTools, CoherentStructures, Dates, StaticArrays
+```
+
+
+We specify the space-time window we are interested in:
+
+```julia
+start_date = DateTime("2006-11-25T00:00:00")
+end_date = DateTime("2006-12-30T00:00:00")
+LL_space = [-50.0,-50.0]
+UR_space = [50.0,50.0]
+```
+
+We can now load the data
+```julia
+schema=r"^dt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$"
+ww_ocean_data="/foo/ww_ocean_data/"
+
+p,ust1,(Lon,Lat,times)  = read_ocean_velocities(ww_ocean_data,start_date, end_date; schema=schema,LL_space=LL_space,UR_space=UR_space)
 
 ```
-using  Distributed, Tensors, StaticArrays, Statistics, Plots
-addprocs(4) #Use 4 processors
 
-import CoherentStructures
-using OceanTools
-
-#Directory containing files like nrt_global_allsat_phy_l4_20170108_20170114.nc
-ww_ocean_data = "/media/public/schillna/ocean1/worldwide_ocean_data/"
-
-#Read in data into p, missing values are set to zero
-p, times = getP(ww_ocean_data, ndays=90, sshs=true, remove_nan=true)
-
-#Garbage collection on all processors
-@everywhere GC.gc()
-
-#Bounding corners of the box on which to plot
-LL = (147.0, 15.0)
-UR = (180.0, 48.0)
-TT = (times[1], times[end])
-
-CoherentStructures.plot_ftle(uv_trilinear, p, TT, LL, UR, 500, 500;
-       tolerance=1e-6, aspect_ratio=1, title="FTLE Field")
+Let's plot a heatmap of the longitudinal component of a tricubic interpolation of the velocity field. 
+```julia
+using Plots
+xs = range(-20,stop=15,length=400)
+ys = range(-10,stop=5,length=400)
+t = times[10]
+Plots.heatmap(xs,ys,(x,y) -> uv_tricubic((@SVector [x,y]),p,t )[1],title="Longitudinal velocity [deg/day]",color=:viridis,aspect_ratio=1.0)
 ```
-![](https://cdn.rawgit.com/CoherentStructures/OceanTools.jl/bfaf27a6/docs/example_ftle.png)
+![](https://github.com/natschil/misc/raw/master/images/oceantools1.png)
+
+Notice how areas where the velocity field is missing (i.e. on land), the velocity is zero. Because knowing land areas is sometimes useful, the `ust1` variable contains a single time slice of the velocity where missing values are `nan`.
+
+The velocity fields used are derived from sea surface height measurements. We can also load the sea surface heigh mesurements directly:
+
+```julia
+p2,_  = read_ocean_scalars(ww_ocean_data,start_date, end_date; schema=schema,LL_space=LL_space,UR_space=UR_space,scalar_field_name="sla")
+Plots.heatmap(xs,ys,(x,y) -> scalar_tricubic((@SVector [x,y]),p2,t ),title="Sea surface height anomaly [m]",color=:viridis,aspect_ratio=1.0)
+```
+
+![](https://github.com/natschil/misc/raw/master/images/oceantools2.png)
+
+It is straightforward to plot trajectories of single particles, we'll make an animation with this [script](https://coherentstructures.github.io/CoherentStructures.jl/stable/videos/):
+```julia
+include("animations.jl")
+x0 = [0.0,0.0]
+trajectory = flow(uv_tricubic,x0,times; p=p)
+
+frames = []
+for (i,t) in enumerate(times)
+    fig = Plots.heatmap(xs,ys,(x,y) -> scalar_tricubic((@SVector [x,y]),p2,t ),title="Sea surface height anomaly [m]",color=:viridis,aspect_ratio=1.0,clim=(-0.1,0.1))
+    Plots.scatter!(fig,(trajectory[i][1],trajectory[i][2]),label="simulated drifter position")
+    push!(frames,fig)
+end
+animatemp4(frames)
+```
+```@raw html
+ <video controls="" height="100%" width="100%">
+  <source src="https://github.com/natschil/misc/raw/master/videos/oceantools1.mp4" type="video/mp4" />
+ Your browser does not support the video tag.
+ </video>
+```
+
+We can also do some fancier analysis with the `CoherentStructures.jl` package:
+```julia
+vortices, singularities, bg = materialbarriers(
+       uv_tricubic, range(-5,7.5,length=300), range(-40,stop=-28,length=300), range(times[2],stop=times[2]+30,length=30),
+       LCSParameters(boxradius=4, indexradius=0.25, pmax=1.4,
+                     merge_heuristics=[combine_20_aggressive]),
+       p=p, on_torus=false);
+
+fig = plot_vortices(vortices, singularities, (-5, -40), (7.5, -28);
+    bg=bg, title="DBS field and transport barriers", showlabel=false)
+
+
+![](https://github.com/natschil/misc/raw/master/images/oceantools3.png)
+
+Computations on larger domains are of course possible. [Here](https://smai-jcm.centre-mersenne.org/item/SMAI-JCM_2020__6__101_0/) is a paper that computes similar structures as above using `OceanTools.jl` on a global scale.
+save

@@ -2,7 +2,7 @@
 #Constants needed for tricubic interpolation
 include("coeff.jl")
 
-@enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2
+@enum BoundaryBehaviour periodic=0 flat=1 outofbounds=2 semiperiodic=3
 
 function sparse_by_svec(A::SparseMatrixCSC{TA}, x::Symbol) where {TA}
     n, m = size(A)
@@ -157,7 +157,7 @@ const AF = A*build_full_finite_difference_matrix()
 
 
 #Just divrem, but casts the first result to Int
-@inline function gooddivrem(x::T, y::Int) where {T}
+@inline function gooddivrem(x::T, y) where {T}
     a, b = divrem(x, T(y))
     return Base.unsafe_trunc(Int, a), b
 end
@@ -170,90 +170,94 @@ end
 =#
 
 """
-    getIndex(x, x0, xf, nx, boundary)
+    getIndex(x, x0, xf,xper, nx, boundary)
 
 Calculates the indexes `i, j` and local coordinates corresponding to a real number `x`,
 where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 [x0 = c_0, c_1), [c_1,c_2), ... [c_(nx-1), xf) where all intervals have equal length.
 """
-@inline function getIndex(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
+@inline function getIndex(x::Float64, x0::Float64, xf::Float64, xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        #xcoord /= spacing
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xpp = (xindex+1) % nx
-    else # boundary == flat || boundary == outofbounds
+    elseif boundary == flat
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        xpp = max(min(xindex + 1,nx-1),0)
+        xindex = max(min(xindex,nx-1),0)
+    elseif boundary  == outofbounds
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
-        if xpp >= nx
-            if boundary == outofbounds
-                throw(BoundsError("Out of bounds access"))
-            else
-                xpp = (nx-1)
-            end
+        if xpp >= nx || xindex < 0
+                error("Out of bounds access at coordinate $x")
         end
-        if xindex >= nx
-            xindex = (nx-1)
-        end
-        if xindex < 0
-            if boundary == outofbounds
-                throw(BoundsError("Out of bounds access"))
-            else
-                xindex = 0
-            end
-        end
-        if xpp < 0
-            xpp = 0
+    else #boundary == semiperiodic
+        #spacing = mod(xf-x0,xper)/nx
+        #xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        xpp = xindex + 1
+        if xpp >= nx || xindex < 0
+                error("Out of bounds access at coordinate $x")
         end
     end
     return xindex, xpp, xcoord
 end
 
-function getIndex2(x::Float64, x0::Float64, xf::Float64, nx::Int, boundary::BoundaryBehaviour)
+"""
+    getIndex2(args)
+
+Like `getIndex`, but also gives back one more set of points to the right/left.
+"""
+function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
+        #spacing = (xf-x0)/nx
+        #xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        #xcoord /= spacing
         xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1), nx)
-    else # boundary == flat || boundary == outofbounds
+    elseif boundary == flat
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        xindex = max(min(xindex,nx-1),0)
+        xpp = max(min(xindex + 1,nx-1),0)
+        xpp2 = max(min(xindex + 2,nx-1),0)
+        xmm = max(min(xindex-1,nx-1),0)
+    elseif boundary == outofbounds
+        #spacing = (xf - x0)/nx
+        #xindex, xcoord = gooddivrem(x-x0, spacing)
+        #xcoord /= spacing
         xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
         xpp = xindex + 1
         xpp2 = xindex + 2
-        xmm = xindex-1
+        xmm = xindex - 1
+        if xmm < 0 || xpp2 > (nx-1)
+                error("Out of bounds access at coordinate $x")
+        end
+    else #boundary == semiperiodic
+        #spacing = mod(xf-x0,xper)/nx
+        #xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        #xcoord /= spacing
+        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        xpp = xindex + 1
+        xpp2 = xindex + 2
+        xmm = xindex - 1
 
-        if xpp2 >= nx
-            if boundary == outofbounds
-                throw(BoundsError("Out of bounds access"))
-            else
-                xpp2 = (nx-1)
-            end
-        end
-        if xpp >= nx
-            xpp = (nx-1)
-        end
-        if xindex >= nx
-            xindex = (nx-1)
-        end
-        if xmm >= nx
-            xmm = (nx-1)
-        end
-
-        if xmm < 0
-            if boundary == outofbounds
-                throw(BoundsError("Out of bounds access"))
-            else
-                xmm = 0
-            end
-        end
-
-        if xindex < 0
-                xindex = 0
-        end
-        if xpp < 0
-            xpp = 0
-        end
-
-        if xpp2 < 0
-            xpp2 = 0
+        if xmm < 0 || xpp2 > (nx-1)
+                error("Out of bounds access at coordinate $x")
         end
     end
     return xindex, xpp, xpp2, xmm, xcoord
@@ -261,40 +265,73 @@ end
 
 
 struct ItpMetadata{T}
+    #The number of datapoints in each direction
     nx::Int
     ny::Int
     nt::Int
+    #The coordinates of the lower left/upper-right corner in space-time. Note that the upper-right corner must be
+    #*one grid spacing beyond* the rightmost datapoint!
     LL::SVector{3,Float64}
     UR::SVector{3,Float64}
+    #In the case that a boundary is `semiperiodic`, what the period in this direction is
+    periods::SVector{3,Float64}
+    #Actual Data
     data::T
+    #How to deal with points outside the boundary in each direction
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
     boundaryT::BoundaryBehaviour
+    function ItpMetadata(nx::Int, ny::Int, nt::Int,
+                        LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, periods::AbstractVector{Float64}, data::T,
+                        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
+        @assert length(LL) == 3
+        @assert length(UR) == 3
+        @assert length(periods) == 3
+        if boundaryX != semiperiodic
+            @assert periods[1] == 0.0
+            @assert UR[1] > LL[1]
+        else
+            @assert periods[1] != 0
+        end
+
+        if boundaryY != semiperiodic
+            @assert periods[2] == 0.0
+            @assert UR[2] > LL[2]
+        else
+            @assert periods[2] != 0
+        end
+
+        if boundaryT != semiperiodic
+            @assert periods[3] == 0.0
+            @assert UR[3] > LL[3]
+        else
+            @assert periods[3] != 0
+        end
+
+        return new{T}(nx, ny, nt,
+                            SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),SVector{3}((periods[1],periods[2],periods[3])),
+                            data, boundaryX, boundaryY, boundaryT)
+    end
+
 end
 
-function ItpMetadata(nx::Int, ny::Int, nt::Int,
-                    LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
-                    boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
-    @assert length(LL) == 3
-    @assert length(UR) == 3
-    return ItpMetadata(nx, ny, nt,
-                        SVector{3}((LL[1], LL[2], LL[3])), SVector{3}((UR[1], UR[2], UR[3])),
-                        data, boundaryX, boundaryY, boundaryT)
-end
+
 @deprecate ItpMetadata(nx::Int, ny::Int, nt::Int,
                     LL::AbstractVector{Float64}, UR::AbstractVector{Float64}, data::T,
                     boundaryX::Int, boundaryY::Int, boundaryT::Int
-                    ) where {T} ItpMetadata(nx, ny, nt, LL, UR, data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+                    ) where {T} ItpMetadata(nx, ny, nt, LL, UR,SVector{3}((0.0,0.0,0.0)), data, BoundaryBehaviour(boundaryX), BoundaryBehaviour(boundaryY), BoundaryBehaviour(boundaryT))
+
 function ItpMetadata(xspan::AbstractRange, yspan::AbstractRange, tspan::AbstractRange, data::T,
-        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
+        boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryT::BoundaryBehaviour; periods=SVector{3}((0.0,0.0,0.0))) where {T}
     nx = length(xspan)
     ny = length(yspan)
     nt = length(tspan)
     LL = SVector{3}((minimum(xspan), minimum(yspan), minimum(tspan)))
     UR = SVector{3}((maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)))
-    return ItpMetadata(nx, ny, nt, LL, UR, data, boundaryX, boundaryY, boundaryT)
+    return ItpMetadata(nx, ny, nt, LL, UR, periods, data, boundaryX, boundaryY, boundaryT)
 end
 
+#For 4D interpolation
 struct ItpMetadata3{T}
     nx::Int
     ny::Int
@@ -302,6 +339,7 @@ struct ItpMetadata3{T}
     nt::Int
     LL::SVector{4,Float64}
     UR::SVector{4,Float64}
+    periods::SVector{4,Float64}
     data::T
     boundaryX::BoundaryBehaviour
     boundaryY::BoundaryBehaviour
@@ -314,8 +352,15 @@ function ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
         boundaryX::BoundaryBehaviour, boundaryY::BoundaryBehaviour, boundaryZ::BoundaryBehaviour, boundaryT::BoundaryBehaviour) where {T}
     @assert length(LL) == 4
     @assert length(UR) == 4
+    #TODO: implement this!
+    @assert boundaryX != semiperiodic
+    @assert boundaryY != semiperiodic
+    @assert boundaryZ != semiperiodic
+
+
+
     ItpMetadata3(nx, ny, nz, nt, SVector{4}((LL[1], LL[2], LL[3], LL[4])),
-                    SVector{4}((UR[1], UR[2], UR[3], UR[4])), data,
+                    SVector{4}((UR[1], UR[2], UR[3], UR[4])), SVector{4}((0.0,0.0,0.0,0.0)), data,
                     boundaryX, boundaryY, boundaryZ, boundaryT)
 end
 @deprecate ItpMetadata3(nx::Int, ny::Int, nz::Int, nt::Int,
@@ -338,8 +383,7 @@ end
     uv_trilinear(u, p, t)
 
 Trilinear interpolation of velocity field at `u` at time `t`.
-Velocity field stored in `p` as returned by [`getP`](@ref).
-Periodic boundary in x and y, constant in t direction.
+Velocity field stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_trilinear(u::SVector{2}, p::ItpMetadata, t::Float64)
     Us = p.data[1]
@@ -352,10 +396,11 @@ function _uv_trilinear(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata, t::Float64
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, pt, nt, p.boundaryT)
 
     r1u = Us[xindex + 1, yindex + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, yindex + 1, tindex + 1]*xcoord
     r2u = Us[xindex + 1, ypp + 1, tindex + 1]*(1-xcoord) + Us[xpp + 1, ypp + 1, tindex + 1]*xcoord
@@ -516,9 +561,8 @@ end
 """
     uv_tricubic(x, p, t)
 
-Tricubic interpolation of velocity field at `u` at time `t`.
-Velocity field stored in `p` as returned by [`getP`](@ref).
-Periodic boundary in x and y, constant in t direction.
+Component wise tricubic interpolation (Leikien-Marsden + finite differences for values not specified in their paper) of velocity field at `u` at time `t`.
+Velocity field stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_tricubic(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
@@ -531,10 +575,11 @@ function _uv_tricubic(u::SVector{2,T}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf,pt, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -549,25 +594,26 @@ end
 
 
 """
-    ssh_tricubic(x, p, t)
-Tricubic interpolation of scalar field field at `u` at time `t`.
-Scalar field stored in `p` as returned by [`getP`](@ref).
-Periodic boundary in x and y, constant in t direction.
+    scalar_tricubic(x, p, t)
+
+Tricubic interpolation (Leikien-Marsden + finite differences for values not specified in their paper) of scalar field at `u` at time `t`.
+Scalar field stored in `p.data[1]`
 """
-function ssh_tricubic(u::StaticVector{2,T}, p, t::Float64) where {T<:Real}
-    sshs = p[7]
-    return @inbounds _ssh_tricubic(u, sshs, p, t)
+function scalar_tricubic(u::StaticVector{2,T}, p, t::Float64) where {T<:Real}
+    sshs = p.data[1]
+    return @inbounds _scalar_tricubic(u, sshs, p, t)
 end
 
 
-function _ssh_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:Real,S}
+function _scalar_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:Real,S}
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
 
     return base_tricubic_interpolation(
         xindex, yindex, tindex,
@@ -576,23 +622,28 @@ function _ssh_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T<:R
         xmm, ymm, tmm,
         nx, ny,
         xcoord, ycoord, tcoord,
-        sshs, sshs)[1] #TODO: Modify this to avoid doing the work twice
+        sshs, sshs)[1] #TODO: Maybe modify this to avoid doing the work twice, though realistically the cache should help a lot here.
 end
 
-function ssh_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
-    sshs = p.data
-    return @inbounds _ssh_tricubic_gradient(u, sshs, p, t)
+"""
+    scalar_tricubic_gradient(u,p,t)
+
+Calculates the (spatial) gradient of the function used in scalar_tricubic
+"""
+function scalar_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
+    sshs = p.data[1]
+    return @inbounds _scalar_tricubic_gradient(u, sshs, p, t)
 end
 
 
-function _ssh_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
+function _scalar_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, p.periods[1], nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, p.periods[2], ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, p.periods[3], nt, p.boundaryT)
 
     res1 = base_tricubic_interpolation_gradient(xindex, yindex, tindex,
                                                 xpp, ypp, tpp,
@@ -606,7 +657,11 @@ function _ssh_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}
 end
 
 
-#Function barrier version
+"""
+    uv_tricubic_eqvari(u,p,t)
+
+The rhs for solving the linearized flow of the vector field (u,v) with CoherentStructures.jl
+"""
 function uv_tricubic_eqvari(u::StaticMatrix{2,3,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
     Vs = p.data[2]
@@ -618,10 +673,11 @@ function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3}, Us::U, Vs::U, p::ItpMetadat
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
+    px,py,pt = p.periods
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
 
     Uitp = base_tricubic_interpolation_gradient(
         xindex, yindex, tindex,
@@ -652,25 +708,48 @@ function inbounds_checker_bilinear(x, y, p)
     return !isnan(uv_trilinear(SVector{2,Float64}((x,y)), p[6], p[6][5][1])[1])
 end
 
-function sshVelocityRHS(u, p::ItpMetadata{S}, t::Float64) where S
-    ∇h = ssh_tricubic_gradient(u, p, t)
+"""
+    ssh_rhs(u,p,t)
+Approximating geostrophic sea-surface velocities with the well-known formula
+```math
+u = -A(y)\\partial_y h(x,y,t)\\ v = A(y)\\partial_x h(x,y,t)
+```
+where:
+*  `u` -- longitudinal component of the velocity,
+*  `v` -- latitudinal component of the velocity,
+*  `x` -- longitude,
+*  `y` -- latitude,
+*  `h` -- sea-surface height.
+and ```math A(y) = g/(R^2 2 \\Omega \\sin y)```
+"""
+function ssh_rhs(u, p::ItpMetadata{S}, t::Float64) where S
+
+    ∇h = scalar_tricubic_gradient(u, p, t)
 
     g = 9.807 #Gravitational constant (m/s^2)
     R = 6371e3 #Radius of earth (m)
-    Ω = 7.2921159e-5 #Mean angular velocity (rad/s)
+    Ω = 7.2921159e-5*R #Mean angular velocity (m/s)
 
     # convert from m/deg to m/rad
-    scale = 360/(2π)
-    ∇h *= scale
+    ∇h *= 360/(2π)
 
-    # calculate velocity conversion factor in rad/s
-    C = g/(R^2*2*Ω*sin(deg2rad(u[2]))*cos(deg2rad(u[2])))
-    # convert from rad/s to rad/day
-    C *= 24*3600
-    # convert from rad/day to deg/day
-    C *= scale
+    #To convert ∇h to m/m, the first component must be divided by R*cos(deg2rad(u[2]))
+    #and the second component must be divided by R, so we could do the R-division already.
+    #But since later on we multiply by R again, we comment it out
+    #∇h /= R 
 
-    return  SVector{2,Float64}((-∇h[2]*C, ∇h[1]*C))
+    #Calculate the velocity conversion factor in (ms)^{-1}
+    C = g/(2*R*Ω*sin(deg2rad(u[2])))
+
+    #Now (except for the cos(deg2rad(u[2])) factor), C*skew(∇h) is in m/s,
+    #but we want deg/s
+    #We need to multiply the x-component by R*cos(deg2rad(u[2]) and the y-component by R
+    #∇h *= R
+    
+    #We want deg/day instead of rad/s though
+    C *= (24*3600)*360/(2π)
+
+    return  SVector{2,Float64}((-∇h[2]*C/cos(deg2rad(u[2])), ∇h[1]*C*cos(deg2rad(u[2]))))
 end
 
 
@@ -778,8 +857,6 @@ end
     uv_quadlinear(u, p, t)
 
 Quadlinear interpolation of velocity field at `u` at time `t`.
-Velocity field stored in `p` as returned by [`getP`](@®ef).
-Periodic boundary in x and y, constant in t direction.
 """
 function uv_quadlinear(u::SVector{3,T}, p::ItpMetadata3{S}, t::Float64) where {T<:Real,S}
     Us = p.data[1]
@@ -793,11 +870,12 @@ function _uv_quadlinear(u::SVector{3,T}, Us::U, Vs::U, Ws::U, p::ItpMetadata3{S}
     nx, ny, nz, nt = p.nx, p.ny, p.nz, p.nt
     ll1, ll2, ll3, t0 = p.LL
     ur1, ur2, ur3, tf = p.UR
+    px, py, pt = p.periods
 
-    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, nx, p.boundaryX)
-    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, ny, p.boundaryY)
-    zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, nz, p.boundaryZ)
-    tindex, tpp, tcoord = getIndex(t, t0, tf, nt, p.boundaryT)
+    xindex, xpp, xcoord = getIndex(u[1], ll1, ur1, px, nx, p.boundaryX)
+    yindex, ypp, ycoord = getIndex(u[2], ll2, ur2, py, ny, p.boundaryY)
+    zindex, zpp, zcoord = getIndex(u[3], ll3, ur3, pz, nz, p.boundaryZ)
+    tindex, tpp, tcoord = getIndex(t, t0, tf, pt, nt,  p.boundaryT)
 
     function singleTriLinear(what, zindex)
         r1u = what[xindex+1, yindex + 1, zindex + 1, tindex + 1]*(1 - xcoord) +
