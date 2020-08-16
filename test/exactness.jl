@@ -54,9 +54,12 @@ Random.seed!(1234)
             gradu = gu([x,y,t])
             gradv = gv([x,y,t])
             #TODO: is this sufficiently exact?
+
             @test res5[1] ≈ gradu[1] rtol=2e-9
             @test res5[2] ≈ gradu[2] rtol=2e-9
 
+            curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
+            res6 = uv_tricubic_eqvari(curmat, metadata, t)
             @test res6[1,1] == res2[1]
             @test res6[2,1] == res2[2]
             @test res6[1,2] == res5[1]
