@@ -17,7 +17,7 @@ function loadEarthMap(nat_earth_path)
 end
 
 """
-    getLonLat(foldername,schema,[lon_label="longitude",lat_label="latitude"])
+    getLonLat(foldername,schema;[lon_label="longitude",lat_label="latitude"])
 
 Here `foldername` is a string, and `schema` is a regular expression.
 The regular expression should match filenames that should be parsed,
@@ -27,9 +27,9 @@ and extract the longitude and latitude vectors.
 Returns a vector of Float64.
 
 """
-function getLonLat(foldername,schema,lon_label="longitude",lat_label="latitude")
+function getLonLat(foldername,schema;lon_label="longitude",lat_label="latitude")
     for filename in readdir(foldername)
-        if match(filename, schema) != nothing
+        if match(schema,filename) != nothing
             d = NCD.Dataset(foldername * "/" * filename)
             lon = NCD.nomissing(d[lon_label][:], NaN)[:]
             lat = NCD.nomissing(d[lat_label][:], NaN)[:]
@@ -58,7 +58,7 @@ end
 """
     _daysSince1950(t)
 Convenience function
-Takes a DateTime object `t` and calculates the number of days since 1950.
+Takes a Dates.DateTime object `t` and calculates the number of days since 1950.
 """
 function _daysSince1950(t)
     #TODO: deal with this better?
@@ -86,9 +86,9 @@ function _rescaleUV!(U, V, Lon, Lat,Us,Vs,numfound,remove_nan,lli,llj)
     R = 6371e3 # radius of the Earth in m
     s =3600*24/R
     n_small = size(Us,1)
-    m_small = size(Vs,2)
+    m_small = size(Us,2)
     n_full = size(U,1)
-    m_full = size(V,2)
+    m_full = size(U,2)
     missing_value = remove_nan ? 0.0 : NaN
     
     for i in 1:n_small, j in 1:m_small
@@ -101,9 +101,9 @@ end
 
 function _cropScalar!(U, Lon, Lat,Us,numfound,remove_nan,lli,llj)
     n_small = size(Us,1)
-    m_small = size(Vs,2)
+    m_small = size(Us,2)
     n_full = size(U,1)
-    m_full = size(V,2)
+    m_full = size(U,2)
     missing_value = remove_nan ? 0.0 : NaN
     
     for i in 1:n_small, j in 1:m_small
@@ -148,22 +148,31 @@ function periodicGoRight(x::Float64,start::Float64,per::Float64)
         return start
 end
 
+
 function _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
 
-    if Lat[1] > LL_space[2]
-        minlat = Lat[1]
-        error("$minlat = Lat[1] > LL_space[2]")
-    end
+    nx_full = length(Lon)
+    ny_full = length(Lat)
 
-    if Lat[end] > UR_space[2]
-        maxlat = Lat[end]
-        error("$maxlat = Lat[end] > UR_space[2]")
+    #Check that data is ok
+    if bounds_given
+        if Lat[1] > LL_space[2]
+            minlat = Lat[1]
+            error("$minlat = Lat[1] > LL_space[2]")
+        end
+
+        if Lat[end] < UR_space[2]
+            maxlat = Lat[end]
+            error("$maxlat = Lat[end] < UR_space[2]")
+        end
     end
 
 
     #Indices below are 0-based!
 
     if bounds_given
+        LL=LL_space
+        UR=UR_space
         #Let's extend Lon by 360-periodicity.
         #Which grid square is LL[1] in? Here is the index of the longitude coordinate to the left it is congruent to
         #(Note that result is 0-indexed!)
@@ -184,7 +193,7 @@ function _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
 
         #As longitudes are not periodic, we don't bother periodizing here.
         llyi = getIndex(LL[2], Lat[1],Lat[1]+180,0.0,ny_full,flat)[1]
-        llyi = Lat[llyi+1]
+        lly = Lat[llyi+1]
         uryi = getIndex(UR[2], Lat[1],Lat[1]+180,0.0,ny_full,flat)[1] + 2
         #In case rouding point errors pushed us off the edge:
         if UR[2] == (Lat[end] + Lat[2] - Lat[1])
@@ -211,13 +220,14 @@ function _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
         perx = 0.0
     end
 
-    return llxi,llyi,llx,lly, urx,ury, nx_small,ny_small,perx,pery
+    return llxi,llyi,llx,lly, urx,ury, nx_small,ny_small,perx
 end
 
+_strtoi(x) = parse(Int64,x)
 
 
 """
-    read_ocean_velocities(foldername,start_date,end_date,boundary_t,schema; [LL_space=nothing,UR_space=nothing,...])
+    read_ocean_velocities(foldername,start_date,end_date,boundary_t, [schema,LL_space=nothing,UR_space=nothing,...])
 
 Reads velocity fields in a space-time window. Uses the whole globe if `LL_space` and `UR_space` are `nothing`.
 Else the rectangle of points will include spatially include the rectangle bounded by `LL_space`  and `UR_space`.
@@ -225,7 +235,7 @@ The first timestep loaded is the first one in the folder `foldername` matching t
 "time" variable (converted to `Int` via kwarg `date_to_int`) is not less than `start_date`.
 Spacing of "time" is assumed to be 1 day, change `date_to_int` if your data is different (note that the units
 of the velocity fields in the files were assumed to be in m/s and are converted to deg/day ).
-The range will include `end_time`
+The range will include `end_date`
 Supports 360-periodic longitude in the sense that `LL_space[1]` can larger than `UR_space[1]`.
 However, it *cannot* extend by more than one period. If you are very close to one period use the whole globe
 to avoid issues.
@@ -233,12 +243,14 @@ The resulting velocities are rescaled to be in degrees!
 Other keyword arguments are: `lon_label` with default "longitude", `lat_label` with default "latitude",
 `remove_nan` with default `true, `array_ctor` with default `SharedArray{Float64}`.
 `date_to_int` with default `_daysSince1950` is the method for converting `DateTime` objects to `Int`.
+`filename_match_to_date` (if not equal to `nothing`) converts the match of the regex `schema` with the filename into the (integer) date
+of the contents.
 
 Returns (res_full, Ust1, (Lon, Lat, times)) where `res_full` is the corresponding `ItpMetdata` object and Ust1 is a
 slice of the x-component at the first timestep without NaNs removed
 """
-function read_ocean_velocities(foldername,start_date::Int,end_date::Int,boundary_t=flat,
-                                schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$",;
+function read_ocean_velocities(foldername,start_date::Dates.DateTime,end_date::Dates.DateTime,boundary_t=flat;
+                                schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$",
                                 LL_space=nothing,UR_space=nothing,
                                 remove_nan=true,
                                 array_ctor=SharedArray{Float64},
@@ -246,10 +258,13 @@ function read_ocean_velocities(foldername,start_date::Int,end_date::Int,boundary
                                 lat_label="latitude",
                                 date_to_int=_daysSince1950,
                                 u_field_name="ugos",
-                                v_field_name="vgos"
+                                v_field_name="vgos",
+                                pert::Float64=0.0,
+                                filename_match_to_date=m -> _daysSince1950(Dates.DateTime(_strtoi(m.captures[1]),_strtoi(m.captures[2]),_strtoi(m.captures[3])))
                                 )
+    @assert (pert == 0.0) == (boundary_t != semiperiodic)
     #Get vector of Longitude and latitude coordinates
-    Lon, Lat = getLonLat(ww_ocean_data,schema,lon_label=lon_label,lat_label=lat_label)
+    Lon, Lat = getLonLat(foldername,schema,lon_label=lon_label,lat_label=lat_label)
     nx_full = length(Lon)
     ny_full = length(Lat)
 
@@ -257,12 +272,33 @@ function read_ocean_velocities(foldername,start_date::Int,end_date::Int,boundary
     bounds_given::Bool =  (LL_space != nothing)
 
 
-    llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx,pery = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
-
     LL = bounds_given ? copy(LL_space) : [Lon[1], Lat[1]] 
     UR = bounds_given ? copy(UR_space) : [Lon[1] + 360, Lat[1] + 180]
 
-    nt = round(Int,ceil(end_date - start_date))
+    llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
+
+
+    start_date_int = date_to_int(start_date)
+    end_date_int = date_to_int(end_date)
+    nt = 0
+    for fname_part in readdir(foldername)
+        m = match(schema,fname_part)
+        if filename_match_to_date != nothing
+            file_date_int = filename_match_to_date(m)
+        else
+            file_date_int = date_to_int(getTime(fname))
+        end
+
+        if file_date_int < start_date_int
+            continue
+        end
+        
+        if file_date_int > end_date_int
+            break
+        end
+        nt += 1
+    end
+
     times = array_ctor(nt)
 
     LonS = array_ctor(nx_full)
@@ -273,31 +309,38 @@ function read_ocean_velocities(foldername,start_date::Int,end_date::Int,boundary
 
     numfound = 0
     last_time = 0
-    for fname_part in readdir(ww_ocean_data)
-        m = match(fname_part,schema)
+    for fname_part in readdir(foldername)
+        m = match(schema,fname_part)
         (m == nothing) && continue
-        fname = ww_ocean_data * "/" * fname_part
+        fname = foldername * "/" * fname_part
 
-        file_date = DateTime(m.matches[1],m.matches[2],m.matches[3])
-        file_days_since_1950 = _daysSince1950(file_date)
+        if filename_match_to_date != nothing
+            file_date_int = filename_match_to_date(m)
+        else
+            file_date_int = date_to_int(getTime(fname))
+        end
 
-        if file_days_since_1950 < start_date
+        if file_date_int < start_date_int
             continue
         end
         
-        if file_days_since_1950 > end_date
+        if file_date_int > end_date_int
             break
         end
 
-        if numfound != 0 && (last_time + 1) != file_days_since_1950
-            error("Time steps are not uniform, error on file $fname_part")
+        if numfound != 0 && (last_time + 1) != file_date_int
+            error("Time steps are not uniform, error on file $fname_part (last_time is $last_time, file_date_int is $file_date_int)")
         end
 
         numfound += 1
         d = NCD.Dataset(fname)
         U, t = loadField(d, u_field_name,date_to_int)
         V, _ = loadField(d, v_field_name,date_to_int)
-        @assert t == file_days_since_1950
+
+        if filename_match_to_date != nothing
+            @assert t == file_date_int
+        end
+
         _rescaleUV!(U, V, Lon, Lat,Us,Vs,numfound,remove_nan,llxi,llyi)
         if numfound == 1
             #Ust1 has the wrong type to pass to _cropScalar, therefore the roundabout way below (that is slightly inefficient).
@@ -307,19 +350,24 @@ function read_ocean_velocities(foldername,start_date::Int,end_date::Int,boundary
         end
         close(d)
         times[numfound] = t
+        last_time = t
     end
     nt = numfound
 
-    if last_time < end_time
-        throw(BoundsError("Only read in $numfound velocities!! (last time read in $last_time < last requested time $end_time)"))
+    if numfound == 0
+        error("No suitable files found")
+    end
+
+    if last_time < end_date_int
+        error("Only read in $numfound velocities!! (last time read in $last_time < last requested time $end_date_int)")
     end
 
 
     boundaryX = bounds_given ? semiperiodic : periodic
     boundaryY = outofbounds
 
-    res_full = ItpMetadata{array_ctor}(nx_small, ny_small, nt, SVector{3}([llx, lly, times[1]]),
-            SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, pery, 0.0]),
+    res_full = ItpMetadata(nx_small, ny_small, nt, SVector{3}([llx, lly, times[1]]),
+            SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, 0.0 , pert]),
             (Us, Vs), boundaryX,boundaryY,boundary_t)
 
 
@@ -332,8 +380,8 @@ end
 Reads in a scalar field, otherwise like `read_ocean_velocities`. 
 Resulting `data` field in the ItpMetdata is a 1-tuple with an array (of type given by `array_ctor`).
 """
-function read_ocean_scalars(foldername,start_date::Int,end_date::Int,boundary_t=flat,
-                                schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$",;
+function read_ocean_scalars(foldername,start_date::Dates.DateTime,end_date::Dates.DateTime,boundary_t=flat;
+                                schema=r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$",
                                 LL_space=nothing,UR_space=nothing,
                                 remove_nan=true,
                                 array_ctor=SharedArray{Float64},
@@ -341,22 +389,47 @@ function read_ocean_scalars(foldername,start_date::Int,end_date::Int,boundary_t=
                                 lat_label="latitude",
                                 date_to_int=_daysSince1950,
                                 scalar_field_name="ssh",
+                                pert=0.0,
+                                filename_match_to_date=m -> _daysSince1950(Dates.DateTime(_strtoi(m.captures[1]),_strtoi(m.captures[2]),_strtoi(m.captures[3])))
                                 )
+
+    @assert (pert == 0.0) == (boundary_t != semiperiodic)
     #Get vector of Longitude and latitude coordinates
-    Lon, Lat = getLonLat(ww_ocean_data,schema,lon_label=lon_label,lat_label=lat_label)
+    Lon, Lat = getLonLat(foldername,schema,lon_label=lon_label,lat_label=lat_label)
     nx_full = length(Lon)
     ny_full = length(Lat)
 
     @assert (LL_space == nothing) == (UR_space == nothing)
     bounds_given::Bool =  (LL_space != nothing)
 
-
-    llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx,pery = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
-
     LL = bounds_given ? copy(LL_space) : [Lon[1], Lat[1]] 
     UR = bounds_given ? copy(UR_space) : [Lon[1] + 360, Lat[1] + 180]
 
-    nt = round(Int,ceil(end_date - start_date))
+
+    llxi,llyi,llx,lly,urx,ury, nx_small,ny_small,perx = _calculateSpatialIndices(Lon,Lat,LL_space,UR_space,bounds_given)
+
+
+
+    start_date_int = date_to_int(start_date)
+    end_date_int = date_to_int(end_date)
+    for fname_part in readdir(foldername)
+        m = match(schema,fname_part)
+        if filename_match_to_date != nothing
+            file_date_int = filename_match_to_date(m)
+        else
+            file_date_int = date_to_int(getTime(fname))
+        end
+
+        if file_date_int < start_date_int
+            continue
+        end
+        
+        if file_date_int > end_date_int
+            break
+        end
+        nt += 1
+    end
+
     times = array_ctor(nt)
 
     LonS = array_ctor(nx_full)
@@ -365,30 +438,35 @@ function read_ocean_scalars(foldername,start_date::Int,end_date::Int,boundary_t=
     Ust1 = array_ctor(nx_small, ny_small, 1)
     numfound = 0
     last_time = 0
-    for fname_part in readdir(ww_ocean_data)
-        m = match(fname_part,schema)
+    for fname_part in readdir(foldername)
+        m = match(schema,fname_part)
         (m == nothing) && continue
-        fname = ww_ocean_data * "/" * fname_part
+        fname = foldername * "/" * fname_part
 
-        file_date = DateTime(m.matches[1],m.matches[2],m.matches[3])
-        file_days_since_1950 = _daysSince1950(file_date)
+        if filename_match_to_date != nothing
+            file_date_int = filename_match_to_date(m)
+        else
+            file_date_int = date_to_int(getTime(fname))
+        end
 
-        if file_days_since_1950 < start_date
+        if file_date_int < start_date_int
             continue
         end
         
-        if file_days_since_1950 > end_date
+        if file_date_int > end_date_int
             break
-        end
-
-        if numfound != 0 && (last_time + 1) != file_days_since_1950
-            error("Time steps are not uniform, error on file $fname_part")
         end
 
         numfound += 1
         d = NCD.Dataset(fname)
         U, t = loadField(d, scalar_field_name,date_to_int)
-        @assert t == file_days_since_1950
+        if filename_match_to_date != nothing
+            @assert t == file_date_int
+        end
+        if numfound != 0 && (last_time + 1) != file_date_int
+            error("Time steps are not uniform, error on file $fname_part (last_time is $last_time, file_date_int is $file_date_int)")
+        end
+
         _cropScalar!(U, Lon, Lat,Us,numfound,remove_nan,llxi,llyi)
         if numfound == 1
             #Ust1 has the wrong type to pass to _cropScalar, therefore the roundabout way below (that is slightly inefficient).
@@ -398,19 +476,20 @@ function read_ocean_scalars(foldername,start_date::Int,end_date::Int,boundary_t=
         end
         close(d)
         times[numfound] = t
+        last_time = t
     end
     nt = numfound
 
-    if last_time < end_time
-        throw(BoundsError("Only read in $numfound velocities!! (last time read in $last_time < last requested time $end_time)"))
+    if last_time < end_date_int
+        throw(BoundsError("Only read in $numfound velocities!! (last time read in $last_time < last requested time $end_date_int)"))
     end
 
 
     boundaryX = bounds_given ? semiperiodic : periodic
     boundaryY = outofbounds
 
-    res_full = ItpMetadata{array_ctor}(nx_small, ny_small, nt, SVector{3}([llx, lly, times[1]]),
-            SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, pery, 0.0]),
+    res_full = ItpMetadata(nx_small, ny_small, nt, SVector{3}([llx, lly, times[1]]),
+            SVector{3}([urx,ury, times[end] + times[2] - times[1]]),SVector{3}([perx, 0.0, pert]),
             (Us,), boundaryX,boundaryY,boundary_t)
 
 

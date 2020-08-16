@@ -157,7 +157,7 @@ const AF = A*build_full_finite_difference_matrix()
 
 
 #Just divrem, but casts the first result to Int
-@inline function gooddivrem(x::T, y::Int) where {T}
+@inline function gooddivrem(x::T, y) where {T}
     a, b = divrem(x, T(y))
     return Base.unsafe_trunc(Int, a), b
 end
@@ -178,23 +178,31 @@ where `x` is in c_i, c_j and the interval [x0,xf) is partitioned into intervals
 """
 @inline function getIndex(x::Float64, x0::Float64, xf::Float64, xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
-        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
+        spacing = (xf-x0)/nx
+        xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        xcoord /= spacing
         xpp = (xindex+1) % nx
     elseif boundary == flat
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        spacing = (xf-x0)/nx
+        xindex, xcoord = gooddivrem(x-x0, spacing)
+        xcoord /= spacing
         xpp = max(min(xindex + 1,nx-1),0)
         xindex = max(min(xindex,nx-1),0)
     elseif boundary  == outofbounds
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        spacing = (xf - x0)/nx
+        xindex, xcoord = gooddivrem(x-x0, spacing)
+        xcoord /= spacing
         xpp = xindex + 1
         if xpp >= nx || xindex < 0
-                throw(BoundsError("Out of bounds access"))
+                error("Out of bounds access at coordinate $x")
         end
     else #boundary == semiperiodic
-        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        spacing = mod(xf-x0,xper)/nx
+        xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        xcoord /= spacing
         xpp = xindex + 1
         if xpp >= nx || xindex < 0
-                throw(BoundsError("Out of bounds access"))
+                error("Out of bounds access at coordinate $x")
         end
     end
     return xindex, xpp, xcoord
@@ -207,33 +215,41 @@ Like `getIndex`, but also gives back one more set of points to the right/left.
 """
 function getIndex2(x::Float64, x0::Float64, xf::Float64,xper::Float64, nx::Int, boundary::BoundaryBehaviour)
     if boundary == periodic
-        xindex, xcoord = gooddivrem((mod(x - x0, (xf-x0))*(nx))/(xf-x0), 1)
+        spacing = (xf-x0)/nx
+        xindex, xcoord = gooddivrem(mod(x - x0, xf-x0),spacing)
+        xcoord /= spacing
         xindex = xindex % nx
         xpp = (xindex+1) % nx
         xpp2 = (xindex+2) % nx
         xmm = mod((xindex-1), nx)
     elseif boundary == flat
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        spacing = (xf - x0)/nx
+        xindex, xcoord = gooddivrem(x-x0, spacing)
+        xcoord /= spacing
         xindex = max(min(xindex,nx-1),0)
         xpp = max(min(xindex + 1,nx-1),0)
         xpp2 = max(min(xindex + 2,nx-1),0)
         xmm = max(min(xindex-1,nx-1),0)
     elseif boundary == outofbounds
-        xindex, xcoord = gooddivrem(((x-x0)*nx)/(xf-x0), 1)
+        spacing = (xf - x0)/nx
+        xindex, xcoord = gooddivrem(x-x0, spacing)
+        xcoord /= spacing
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex - 1
         if xmm < 0 || xpp2 > (nx-1)
-                throw(BoundsError("Out of bounds access"))
+                error("Out of bounds access at coordinate $x")
         end
     else #boundary == semiperiodic
-        xindex, xcoord = gooddivrem((mod(x-x0,xper)*nx)/mod(xf-x0,xper), 1)
+        spacing = mod(xf-x0,xper)/nx
+        xindex, xcoord = gooddivrem(mod(x-x0,xper), spacing)
+        xcoord /= spacing
         xpp = xindex + 1
         xpp2 = xindex + 2
         xmm = xindex - 1
 
         if xmm < 0 || xpp2 > (nx-1)
-                throw(BoundsError("Out of bounds access"))
+                error("Out of bounds access at coordinate $x")
         end
     end
     return xindex, xpp, xpp2, xmm, xcoord

@@ -8,10 +8,10 @@ Random.seed!(1234)
     x0 = 0.0
     xf = 1.0
     nx = 123
-    for boundary in instances(CopernicusUtils.BoundaryBehaviour)
-        xper = boundary == CopernicusUtils.semiperiodic ? 3.0 : 0.0
-        @inferred CopernicusUtils.getIndex(x, x0, xf, xper, nx, boundary)
-        @inferred CopernicusUtils.getIndex2(x, x0, xf, xper, nx, boundary)
+    for boundary in instances(OceanTools.BoundaryBehaviour)
+        xper = boundary == OceanTools.semiperiodic ? 3.0 : 0.0
+        @inferred OceanTools.getIndex(x, x0, xf, xper, nx, boundary)
+        @inferred OceanTools.getIndex2(x, x0, xf, xper, nx, boundary)
     end
     @inferred OceanTools.gooddivrem(x, nx)
 end
