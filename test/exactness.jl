@@ -1,4 +1,4 @@
-using Test, OceanTools, Random, StaticArrays
+using Test, OceanTools, Random, StaticArrays, ForwardDiff
 
 Random.seed!(1234)
 
@@ -14,11 +14,17 @@ Random.seed!(1234)
     for fu in myfuncs, b in bmodes
         fv(x,y,t) = fu(y,x,t)
 
+        gu = x -> ForwardDiff.gradient(y->fu(y[1],y[2],y[3]), x)
+        gv = x -> ForwardDiff.gradient(y->fv(y[1],y[2],y[3]), x)
+
         U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
         V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
         perx = (b == OceanTools.semiperiodic) ? 20 : 0.0
         metadata = @inferred OceanTools.ItpMetadata(xspan, yspan, tspan,
              (U, V), b, oob, oob; periods=(@SVector [perx, 0.0,0.0]))
+
+        metadata2 = @inferred OceanTools.ItpMetadata(xspan, yspan, tspan,
+             (U,), b, oob, oob; periods=(@SVector [perx, 0.0,0.0]))
 
 
         for i in 1:5000
@@ -40,6 +46,23 @@ Random.seed!(1234)
                 curpt = @SVector [x,y]
             end
             res2 =  uv_tricubic(curpt, metadata, t)
+        
+            res4 = scalar_tricubic(curpt,metadata2,t)
+            @test res4 == res2[1]
+
+            res5 = scalar_tricubic_gradient(curpt,metadata2,t)
+            gradu = gu([x,y,t])
+            gradv = gv([x,y,t])
+            #TODO: is this sufficiently exact?
+            @test res5[1] ≈ gradu[1] rtol=2e-9
+            @test res5[2] ≈ gradu[2] rtol=2e-9
+
+            @test res6[1,1] == res2[1]
+            @test res6[2,1] == res2[2]
+            @test res6[1,2] == res5[1]
+            @test res6[1,3] == res5[2]
+            @test res6[2,2] ≈ gradv[1] rtol=2e-9
+            @test res6[2,3] ≈ gradv[2] rtol=2e-9
 
             @test res2[1] ≈ fu(x,y,t) rtol=3e-14
             @test res2[2] ≈ fv(x,y,t) rtol=3e-14

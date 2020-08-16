@@ -600,7 +600,7 @@ Tricubic interpolation (Leikien-Marsden + finite differences for values not spec
 Scalar field stored in `p.data[1]`
 """
 function scalar_tricubic(u::StaticVector{2,T}, p, t::Float64) where {T<:Real}
-    sshs = p[1]
+    sshs = p.data[1]
     return @inbounds _scalar_tricubic(u, sshs, p, t)
 end
 
@@ -626,11 +626,11 @@ function _scalar_tricubic(u::StaticVector{2,T}, sshs::S, p, t::Float64) where {T
 end
 
 """
-    tricubic_gradient(u,p,t)
+    scalar_tricubic_gradient(u,p,t)
 
-Calculates the same interpolation function as scalar_tricubic
+Calculates the (spatial) gradient of the function used in scalar_tricubic
 """
-function tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
+function scalar_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
     sshs = p.data[1]
     return @inbounds _scalar_tricubic_gradient(u, sshs, p, t)
 end
@@ -641,9 +641,9 @@ function _scalar_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
 
-    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, px, nx, p.boundaryX)
-    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, py, ny, p.boundaryY)
-    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
+    xindex, xpp, xpp2, xmm, xcoord = getIndex2(u[1],ll1,ur1, p.periods[1], nx, p.boundaryX)
+    yindex, ypp, ypp2, ymm, ycoord = getIndex2(u[2],ll2,ur2, p.periods[2], ny, p.boundaryY)
+    tindex, tpp, tpp2, tmm, tcoord = getIndex2(t, t0, tf, p.periods[3], nt, p.boundaryT)
 
     res1 = base_tricubic_interpolation_gradient(xindex, yindex, tindex,
                                                 xpp, ypp, tpp,
@@ -720,26 +720,36 @@ where:
 *  `x` -- longitude,
 *  `y` -- latitude,
 *  `h` -- sea-surface height.
+and ```math A(y) = g/(R^2 2 \\Omega \\sin y)```
 """
 function ssh_rhs(u, p::ItpMetadata{S}, t::Float64) where S
+
     ∇h = scalar_tricubic_gradient(u, p, t)
 
     g = 9.807 #Gravitational constant (m/s^2)
     R = 6371e3 #Radius of earth (m)
-    Ω = 7.2921159e-5 #Mean angular velocity (rad/s)
+    Ω = 7.2921159e-5*R #Mean angular velocity (m/s)
 
     # convert from m/deg to m/rad
-    scale = 360/(2π)
-    ∇h *= scale
+    ∇h *= 360/(2π)
 
-    # calculate velocity conversion factor in rad/s
-    C = g/(R^2*2*Ω*sin(deg2rad(u[2]))*cos(deg2rad(u[2])))
-    # convert from rad/s to rad/day
-    C *= 24*3600
-    # convert from rad/day to deg/day
-    C *= scale
+    #To convert ∇h to m/m, the first component must be divided by R*cos(deg2rad(u[2]))
+    #and the second component must be divided by R, so we could do the R-division already.
+    #But since later on we multiply by R again, we comment it out
+    #∇h /= R 
 
-    return  SVector{2,Float64}((-∇h[2]*C, ∇h[1]*C))
+    #Calculate the velocity conversion factor in (ms)^{-1}
+    C = g/(2*R*Ω*sin(deg2rad(u[2])))
+
+    #Now (except for the cos(deg2rad(u[2])) factor), C*skew(∇h) is in m/s,
+    #but we want deg/s
+    #We need to multiply the x-component by R*cos(deg2rad(u[2]) and the y-component by R
+    #∇h *= R
+    
+    #We want deg/day instead of rad/s though
+    C *= (24*3600)*360/(2π)
+
+    return  SVector{2,Float64}((-∇h[2]*C/cos(deg2rad(u[2])), ∇h[1]*C*cos(deg2rad(u[2]))))
 end
 
 

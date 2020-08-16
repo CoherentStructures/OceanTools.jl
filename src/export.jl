@@ -3,7 +3,7 @@ export
    uv_tricubic,
    uv_quadlinear,
    scalar_tricubic,
-   tricubic_gradient,
+   scalar_tricubic_gradient,
    uv_tricubic_eqvari,
    ssh_rhs,
    read_ocean_velocities,

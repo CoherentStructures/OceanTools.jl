@@ -49,4 +49,19 @@ end
     b = @benchmarkable uv_tricubic($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
+
+    b = @benchmarkable scalar_tricubic($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+    b = @benchmarkable uv_tricubic_eqvari($curmat, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+    b = @benchmarkable scalar_tricubic_gradient($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+
+
+
 end

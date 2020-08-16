@@ -412,6 +412,7 @@ function read_ocean_scalars(foldername,start_date::Dates.DateTime,end_date::Date
 
     start_date_int = date_to_int(start_date)
     end_date_int = date_to_int(end_date)
+    nt = 0
     for fname_part in readdir(foldername)
         m = match(schema,fname_part)
         if filename_match_to_date != nothing
@@ -457,14 +458,16 @@ function read_ocean_scalars(foldername,start_date::Dates.DateTime,end_date::Date
             break
         end
 
+        if numfound != 0 && (last_time + 1) != file_date_int
+            error("Time steps are not uniform, error on file $fname_part (last_time is $last_time, file_date_int is $file_date_int)")
+        end
+
         numfound += 1
         d = NCD.Dataset(fname)
         U, t = loadField(d, scalar_field_name,date_to_int)
+
         if filename_match_to_date != nothing
             @assert t == file_date_int
-        end
-        if numfound != 0 && (last_time + 1) != file_date_int
-            error("Time steps are not uniform, error on file $fname_part (last_time is $last_time, file_date_int is $file_date_int)")
         end
 
         _cropScalar!(U, Lon, Lat,Us,numfound,remove_nan,llxi,llyi)
