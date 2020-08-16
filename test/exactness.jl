@@ -34,16 +34,15 @@ Random.seed!(1234)
             t += 3.0
 
             if b == OceanTools.semiperiodic
-                continue
-                #curpt = @SVector [x + 20*(rand(Int)%5),y]
-                curpt = @SVector [x,y]
+                curpt = @SVector [x + 20*(rand(Int)%5),y]
+                #curpt = @SVector [x,y]
             else
                 curpt = @SVector [x,y]
             end
             res2 =  uv_tricubic(curpt, metadata, t)
 
-            @test res2[1] ≈ fu(x,y,t) rtol=2e-14
-            @test res2[2] ≈ fv(x,y,t) rtol=2e-14
+            @test res2[1] ≈ fu(x,y,t) rtol=3e-14
+            @test res2[2] ≈ fv(x,y,t) rtol=3e-14
         end
     end
 end
@@ -60,30 +59,38 @@ end
     U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
     V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-    metadata = OceanTools.ItpMetadata(length(xspan), length(yspan), length(tspan),
-         (@SVector [minimum(xspan), minimum(yspan), minimum(tspan)]),
-         (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),
-         (U, V), oob, oob, oob)
 
-    for i in 1:5000
-        x, y, t = rand(3)
+    oob = OceanTools.outofbounds
+    bmodes = [oob, OceanTools.periodic,OceanTools.semiperiodic, OceanTools.flat]
+    for b in bmodes
+        perx = (b == OceanTools.semiperiodic) ? 200.0 : 0.0
 
-        x *= 80.0
-        x += 4.0
+        metadata = OceanTools.ItpMetadata(length(xspan), length(yspan), length(tspan),
+             (@SVector [minimum(xspan), minimum(yspan), minimum(tspan)]),
+             (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),(@SVector [perx,0.0,0.0]),
+             (U, V), b, oob, oob)
 
-        y *= 40
-        y += 106.0
 
-        t *= 5.0
-        t += 12.0
+        for i in 1:5000
+            x, y, t = rand(3)
 
-        curpt = @SVector [x,y]
-        res1 =  uv_trilinear(curpt, metadata,t)
-        res2 =  uv_tricubic(curpt, metadata,t)
-        @test res1[1] ≈ fu(x,y,t) rtol=2e-14
-        @test res1[2] ≈ fv(x,y,t) rtol=2e-14
-        @test res2[1] ≈ fu(x,y,t) rtol=2e-14
-        @test res2[2] ≈ fv(x,y,t) rtol=2e-14
+            x *= 80.0
+            x += 4.0
+
+            y *= 40
+            y += 106.0
+
+            t *= 5.0
+            t += 12.0
+
+            curpt = @SVector [x,y]
+            res1 =  uv_trilinear(curpt, metadata,t)
+            res2 =  uv_tricubic(curpt, metadata,t)
+            @test res1[1] ≈ fu(x,y,t) rtol=2e-14
+            @test res1[2] ≈ fv(x,y,t) rtol=2e-14
+            @test res2[1] ≈ fu(x,y,t) rtol=2e-14
+            @test res2[2] ≈ fv(x,y,t) rtol=2e-14
+        end
     end
 end
 
@@ -97,9 +104,7 @@ end
     V = fill(v, length(xspan), length(yspan), length(tspan))
 
     for per in (OceanTools.periodic, OceanTools.flat)
-        metadata = OceanTools.ItpMetadata(length(xspan), length(yspan), length(tspan),
-             (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
-             (@SVector [maximum(xspan)+step(xspan), maximum(yspan)+step(yspan), maximum(tspan)+step(tspan)]),
+        metadata = OceanTools.ItpMetadata(xspan,yspan,tspan,
              (U, V), per, per, per)
 
         for i in 1:5000

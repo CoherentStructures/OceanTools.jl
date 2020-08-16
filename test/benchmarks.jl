@@ -29,10 +29,7 @@ end
     U = [fu(x,y,t) for x in xspan, y in yspan, t in tspan]
     V = [fv(x,y,t) for x in xspan, y in yspan, t in tspan]
 
-    metadata = @inferred OceanTools.ItpMetadata(
-                  length(xspan), length(yspan), length(tspan),
-                  (@SVector [minimum(xspan),minimum(yspan),minimum(tspan)]),
-                  (@SVector [maximum(xspan)+step(xspan),maximum(yspan)+step(yspan),maximum(tspan)+step(tspan)]),
+    metadata = @inferred OceanTools.ItpMetadata(xspan,yspan,tspan,
                   (U,V), oob, oob, oob)
 
     curpt = SVector{2}(10rand(2))
