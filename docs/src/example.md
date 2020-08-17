@@ -98,4 +98,3 @@ fig = plot_vortices(vortices, singularities, (-5, -40), (7.5, -28);
 ![](https://github.com/natschil/misc/raw/master/images/oceantools3.png)
 
 Computations on larger domains are of course possible. [Here](https://smai-jcm.centre-mersenne.org/item/SMAI-JCM_2020__6__101_0/) is a paper that computes similar structures as above using `OceanTools.jl` on a global scale.
-save
