@@ -14,7 +14,7 @@ Fast, allocation free interpolation on regular grids supporting periodic boundar
 # Documentation
 [![][docs-dev-img]][docs-dev-url]
 
-# Example Picture
+# Example Pictures
 
 FTLE field for a 90 day period off the coast of Japan.
 

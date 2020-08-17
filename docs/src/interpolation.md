@@ -22,7 +22,7 @@ scalar_tricubic
 There is support for calculating gradients of the interpolants in the spatial dimensions.
 
 ```@docs
-tricubic_gradient
+scalar_tricubic_gradient
 ```
 This function has not been extensively tested/used.
 
