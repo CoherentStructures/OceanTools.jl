@@ -231,22 +231,28 @@ _strtoi(x) = parse(Int64,x)
 
 Reads velocity fields in a space-time window. Uses the whole globe if `LL_space` and `UR_space` are `nothing`.
 Else the rectangle of points will include spatially include the rectangle bounded by `LL_space`  and `UR_space`.
+
 The first timestep loaded is the first one in the folder `foldername` matching the regular expression `schema` where the 
 "time" variable (converted to `Int` via kwarg `date_to_int`) is not less than `start_date`.
+
 Spacing of "time" is assumed to be 1 day, change `date_to_int` if your data is different (note that the units
-of the velocity fields in the files were assumed to be in m/s and are converted to deg/day ).
+of the velocity fields in the files were assumed to be in m/s and are converted to deg/day, you will have to manually rescale if spacing is not 1 day ).
 The range will include `end_date`
+
 Supports 360-periodic longitude in the sense that `LL_space[1]` can larger than `UR_space[1]`.
 However, it *cannot* extend by more than one period. If you are very close to one period use the whole globe
 to avoid issues.
-The resulting velocities are rescaled to be in degrees!
-Other keyword arguments are: `lon_label` with default "longitude", `lat_label` with default "latitude",
-`remove_nan` with default `true, `array_ctor` with default `SharedArray{Float64}`.
-`date_to_int` with default `_daysSince1950` is the method for converting `DateTime` objects to `Int`.
-`filename_match_to_date` (if not equal to `nothing`) converts the match of the regex `schema` with the filename into the (integer) date
+
+Other keyword arguments are:
+* `lon_label` with default "longitude"
+* `lat_label` with default "latitude"
+* `remove_nan` with default `true`, sets missing values to 0 instead of `NaN`
+* `array_ctor` with default `SharedArray{Float64}` to specify underlying storage to use.
+* `date_to_int` with default `_daysSince1950` is the method for converting `DateTime` objects to `Int`
+* `filename_match_to_date` (if not equal to `nothing`) converts the match of the regex `schema` with the filename into the (integer) date
 of the contents.
 
-Returns (res_full, Ust1, (Lon, Lat, times)) where `res_full` is the corresponding `ItpMetdata` object and Ust1 is a
+Returns `(res_full, Ust1, (Lon, Lat, times))` where `res_full` is the corresponding `ItpMetdata` object and Ust1 is a
 slice of the x-component at the first timestep without NaNs removed
 """
 function read_ocean_velocities(foldername,start_date::Dates.DateTime,end_date::Dates.DateTime,boundary_t=flat;
@@ -375,7 +381,7 @@ function read_ocean_velocities(foldername,start_date::Dates.DateTime,end_date::D
 end
 
 """
-    read_ocean_scalars(args...; kwargs...)
+    read_ocean_scalars(args...;scalar_field_name="ssh", kwargs...)
 
 Reads in a scalar field, otherwise like `read_ocean_velocities`. 
 Resulting `data` field in the ItpMetdata is a 1-tuple with an array (of type given by `array_ctor`).
