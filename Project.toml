@@ -5,15 +5,16 @@ version = "v2.0.0"
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 SharedArrays = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Tensors = "48a634ad-e948-5137-8d70-aa71f2a747f4"
-ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 
 [compat]
 FileIO = "1"
+ForwardDiff = "0.10"
 NCDatasets = "0.9, 0.10"
 StaticArrays = "0.10, 0.11, 0.12"
 Tensors = "1.0.1"
