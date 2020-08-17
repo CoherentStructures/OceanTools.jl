@@ -7,4 +7,8 @@ export
    uv_tricubic_eqvari,
    ssh_rhs,
    read_ocean_velocities,
-   read_ocean_scalars
+   read_ocean_scalars,
+   periodic,
+   semiperiodic,
+   flat,
+   outofbounds

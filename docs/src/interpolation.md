@@ -1,6 +1,6 @@
 # Interpolation on regular grids in 3D
 
-Once you have constructed an ItpMetdata object `p` (e.g. using `read_ocean_velocities`, or by hand (see `src/interpolation.jl` for details on what the fields mean)), you can interpolate the underlying scalar/velocity field.
+Once you have constructed an ItpMetdata object `p` (e.g. using `read_ocean_velocities`, or by hand (see below), you can interpolate the underlying scalar/velocity field.
 
 To do so, call `fun(u,p,t)` where `fun` is one of the functions below. Here `u` are the spatial coordinates and `t` is the time.
 
@@ -59,6 +59,12 @@ but that there can be "missing" values in between. For example, the case LL = [3
 with `p.boundaryY=semiperiodic` corresponds to the case where values are present for a small part of the globe.
 Evaluating at an x coordinate of 0 (or any other multiple of 360) works (provided that the values of `y` and `t` are inbounds.
 However, evaluating at an x-coordinate of 180 would raise an error.
+
+# Constructing an ItpMetadata object by hand
+
+The easiest way to do this is to call the constructor `ItpMetadata(xspan,yspan,tspan, data, boundaryX,boundarY,boundaryT)`. Here `xspan`, `yspan` and `tspan` are ranges that correspond to the values of the coordinates at the datapoints. For example, if you have a $2\pi$ periodic grid with $10$ points in each direction, these should all be `range(0,stop=2\pi,length=11)[1:end-1]`.
+
+The argument `data` is either (a) a 1-tuple containing a 3d array like object of the values at grid points or (b) a 2-tuple containing two 3d array like objects of values at grid points. Orderin should be in the form `array_like_object[x_index,y_index,t_index]` and with column-major layout. The case (a) is if you want to interpolate scalars, (b) is if you want to interpolate vectors (i.e. time-dependent spatial velocity fields)
 
 # Interpolation on regular grids in 4D
 

@@ -559,9 +559,9 @@ function base_tricubic_interpolation_gradient(
 end
 
 """
-    uv_tricubic(x, p, t)
+    uv_tricubic(u, p, t)
 
-Component wise tricubic interpolation (Leikien-Marsden + finite differences for values not specified in their paper) of velocity field at `u` at time `t`.
+Component wise tricubic inuerpolation (Leikien-Marsden + finite differences for values not specified in their paper) of velocity field at `u` at time `t`.
 Velocity field stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_tricubic(u::SVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
