@@ -13,7 +13,7 @@ Random.seed!(1234)
         @inferred OceanTools.getIndex(x, x0, xf, xper, nx, boundary)
         @inferred OceanTools.getIndex2(x, x0, xf, xper, nx, boundary)
     end
-    @inferred OceanTools.gooddivrem(x, nx)
+    @test (@inferred OceanTools.gooddivrem(x, nx)) == divrem(x, nx)
 end
 
 @testset "zero allocations" begin
