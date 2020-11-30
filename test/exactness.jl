@@ -60,10 +60,10 @@ Random.seed!(1234)
 
             curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
             res6 = uv_tricubic_eqvari(curmat, metadata, t)
-            # @test res6[1,1] == res2[1]
-            # @test res6[2,1] == res2[2]
-            # @test res6[1,2] == res5[1]
-            # @test res6[1,3] == res5[2]
+            @test res6[1,1] == res2[1]
+            @test res6[2,1] == res2[2]
+            @test res6[1,2] == res5[1]
+            @test res6[1,3] == res5[2]
             @test res6[2,2] ≈ gradv[1] rtol=2e-9
             @test res6[2,3] ≈ gradv[2] rtol=2e-9
 
