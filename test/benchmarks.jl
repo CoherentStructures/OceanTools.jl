@@ -68,4 +68,8 @@ end
     b = @benchmarkable scalar_tricubic_gradient($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
+
+    b = @benchmarkable ssh_rhs($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
 end
