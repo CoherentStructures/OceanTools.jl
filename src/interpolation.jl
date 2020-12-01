@@ -417,7 +417,7 @@ end
 """
     uv_trilinear(u, p, t)
 
-Trilinear interpolation of velocity field at `u` at time `t`.
+Trilinear interpolation of velocity field at location `u` at time `t`.
 Velocity field stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_trilinear(u::SVector{2}, p::ItpMetadata, t)
@@ -426,8 +426,9 @@ function uv_trilinear(u::SVector{2}, p::ItpMetadata, t)
 end
 
 """
-    scalar_trilinear(x, p, t)
-Trilinear interpolation of scalar field at `x` at time `t`.
+    scalar_trilinear(u, p, t)
+
+Trilinear interpolation of scalar field at location `u` at time `t`.
 Scalar field is assumed to be stored in `p.data[1]`.
 """
 function scalar_trilinear(u::SVector{2}, p, t)
@@ -475,18 +476,19 @@ end
 """
     uv_tricubic(u, p, t)
 
-Component-wise tricubic interpolation (Lekien-Marsden + finite differences for values not specified in their paper) of velocity field at `u` at time `t`.
-Velocity field stored in `p.data[1]` and `p.data[2]`.
+Tricubic interpolation (Lekien-Marsden + finite differences for values not
+specified in their paper) of velocity field at location `u` at time `t`.
+Velocity field components are assumed to be stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_tricubic(u::SVector{2}, p, t)
     return _interp2_tricubic(p.data[1], p.data[2], _get_cubic_args(u, p, t)...)
 end
 
 """
-    scalar_tricubic(x, p, t)
+    scalar_tricubic(u, p, t)
 
 Tricubic interpolation (Lekien-Marsden + finite differences for values not
-specified in their paper) of scalar field at `u` at time `t`.
+specified in their paper) of scalar field at location `u` at time `t`.
 Scalar field is assumed to be stored in `p.data[1]`.
 """
 function scalar_tricubic(u::StaticVector{2}, p, t::Float64)
@@ -565,7 +567,7 @@ function _interp_grad_tricubic(Fs, xs, ys, ts, xp, dxp, yp, dyp, tp, nx, ny)
 end
 
 """
-    scalar_tricubic_gradient(u,p,t)
+    scalar_tricubic_gradient(u, p, t)
 
 Calculates the (spatial) gradient of the interpolant obtained from [`scalar_tricubic`](@ref).
 """
@@ -577,7 +579,7 @@ end
 """
     uv_tricubic_eqvari(u,p,t)
 
-The rhs for solving the linearized flow of the vector field (u,v) with `CoherentStructures.jl`.
+The rhs for solving the linearized flow of the vector field with `CoherentStructures.jl`.
 """
 function uv_tricubic_eqvari(U::StaticMatrix{2,3}, p::ItpMetadata, t)
     u = SVector{2}((U[1,1], U[2,1]))
@@ -608,7 +610,7 @@ where:
 * `v` -- latitudinal component of the velocity,
 * `x` -- longitude,
 * `y` -- latitude,
-* `h` -- sea-surface height.
+* `h` -- sea-surface height,
 
 and
 
