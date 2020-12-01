@@ -613,7 +613,7 @@ where:
 and
 
 ```math
-A(y) = g/(R^2 2 \\Omega \\sin y).
+A(y) = g/(2 R^2 \\Omega \\sin y).
 ```
 """
 function ssh_rhs(u, p::ItpMetadata, t)
