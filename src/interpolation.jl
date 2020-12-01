@@ -577,7 +577,7 @@ end
 """
     uv_tricubic_eqvari(u,p,t)
 
-The rhs for solving the linearized flow of the vector field (u,v) with CoherentStructures.jl
+The rhs for solving the linearized flow of the vector field (u,v) with `CoherentStructures.jl`.
 """
 function uv_tricubic_eqvari(U::StaticMatrix{2,3}, p::ItpMetadata, t)
     u = SVector{2}((U[1,1], U[2,1]))
@@ -615,6 +615,11 @@ and
 ```math
 A(y) = g/(2 R^2 \\Omega \\sin y).
 ```
+
+!!! note
+    The sea surface height is assumed to be given in meters, the grid is assumed to
+    be given in degrees (longitude/latitude). The output unit of the velocity is
+    degree/day.
 """
 function ssh_rhs(u, p::ItpMetadata, t)
     ∇h = scalar_tricubic_gradient(u, p, t)
