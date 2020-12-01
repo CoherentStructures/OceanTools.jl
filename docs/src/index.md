@@ -10,9 +10,10 @@ These are written to be
 
 * as fast as possible
 * effectively parallelizable
-* easily usable from [CoherentStructures.jl](https://github.com/CoherentStructures/CoherentStructures.jl)
+* easily usable from [`CoherentStructures.jl`](https://github.com/CoherentStructures/CoherentStructures.jl)
 
-This package was developed by Nathanael Schilling at TUM.
+This package was developed by Nathanael Schilling at TUM, and is maintained
+by Daniel Karrasch (TUM).
 
 ## Installation
 
@@ -38,20 +39,24 @@ Tricubic interpolation is implemented using the algorithm of Lekien and Marsden'
 along with a function to obtain the gradient (in space) of the interpolation function.
 
 This gives a way of approximating geostrophic sea-surface velocities with the well-known formula
-$$
-u = -A(y)\partial_y h(x,y,t),\\ v = A(y)\partial_x h(x,y,t),
-$$
+
+```math
+\begin{aligned}
+u &= -A(y)\partial_y h(x,y,t),\\
+v &= A(y)\partial_x h(x,y,t),
+\end{aligned}
+```
 
 where:
 
-* $u$ -- longitudinal component of the velocity,
-* $v$ -- latitudinal component of the velocity,
-* $x$ -- longitude,
-* $y$ -- latitude,
-* $h$ -- sea-surface height.
+* ``u`` - longitudinal component of the velocity,
+* ``v`` - latitudinal component of the velocity,
+* ``x`` - longitude,
+* ``y`` - latitude,
+* ``h`` - sea-surface height.
 
-Here, $A(y) = g/(R 2 \Omega \sin y)$  with $g$ the gravitational constant, $R$
-the radius of the earth, $\Omega$ is the earth's mean angular velocity (in m/s).
+Here, ``A(y) = g/(R 2 \Omega \sin y)``  with $g$ the gravitational constant, ``R``
+the radius of the earth, ``\Omega`` is the earth's mean angular velocity (in m/s).
 This equation is implemented in the [`ssh_rhs`](@ref) function.
 
 For a list of functions that are implemented by this package, consult the
