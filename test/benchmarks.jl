@@ -34,19 +34,25 @@ end
 
     curpt = SVector{2}(10rand(2))
     t = 10rand()
-    @benchmark uv_tricubic($curpt, $metadata, $t)
-    @benchmark uv_trilinear($curpt, $metadata, $t)
+    # @benchmark uv_tricubic($curpt, $metadata, $t)
+    # @benchmark uv_trilinear($curpt, $metadata, $t)
     curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
 
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)
+    @inferred scalar_trilinear(curpt, metadata, t)
     @inferred uv_tricubic(curpt, metadata, t)
+    @inferred scalar_tricubic(curpt, metadata, t)
 
     # zero allocations
     b = @benchmarkable uv_trilinear($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
 
+    b = @benchmarkable scalar_trilinear($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+    
     b = @benchmarkable uv_tricubic($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
@@ -62,7 +68,4 @@ end
     b = @benchmarkable scalar_tricubic_gradient($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
-
-
-
 end
