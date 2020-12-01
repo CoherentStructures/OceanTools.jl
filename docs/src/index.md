@@ -55,7 +55,7 @@ where:
 * ``y`` - latitude,
 * ``h`` - sea-surface height.
 
-Here, ``A(y) = g/(R 2 \Omega \sin y)``  with $g$ the gravitational constant, ``R``
+Here, ``A(y) = g/(2 R \Omega \sin y)``  with $g$ the gravitational constant, ``R``
 the radius of the earth, ``\Omega`` is the earth's mean angular velocity (in m/s).
 This equation is implemented in the [`ssh_rhs`](@ref) function.
 
