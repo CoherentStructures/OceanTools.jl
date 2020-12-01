@@ -62,8 +62,8 @@ Random.seed!(1234)
             res6 = uv_tricubic_eqvari(curmat, metadata, t)
             @test res6[1,1] == res2[1]
             @test res6[2,1] == res2[2]
-            @test res6[1,2] == res5[1]
-            @test res6[1,3] == res5[2]
+            @test res6[1,2] ≈ res5[1] rtol=eps()
+            @test res6[1,3] ≈ res5[2] rtol=eps()
             @test res6[2,2] ≈ gradv[1] rtol=2e-9
             @test res6[2,3] ≈ gradv[2] rtol=2e-9
 

@@ -36,7 +36,7 @@ end
     t = 10rand()
     # @benchmark uv_tricubic($curpt, $metadata, $t)
     # @benchmark uv_trilinear($curpt, $metadata, $t)
-    curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
+    curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1]
 
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)

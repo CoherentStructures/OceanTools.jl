@@ -444,7 +444,7 @@ end
 
 # TRICUBIC INTERPOLATION
 
-function _get_cubic_args(u::SVector{2}, p, t)
+function _get_index2(u::SVector{2}, p, t)
     nx, ny, nt = p.nx, p.ny, p.nt
     ll1, ll2, t0 = p.LL
     ur1, ur2, tf = p.UR
@@ -455,13 +455,19 @@ function _get_cubic_args(u::SVector{2}, p, t)
     ymm, yindex, ypp, ypp2, y = getIndex2(yi, ll2, ur2, py, ny, p.boundaryY)
     tmm, tindex, tpp, tpp2, t = getIndex2(t,   t0,  tf, pt, nt, p.boundaryT)
 
-    xp = SVector{4}((1.0, x, x^2, x^3))
-    yp = SVector{4}((1.0, y, y^2, y^3))
-    tp = SVector{4}((1.0, t, t^2, t^3))
-
     xs = (xmm, xindex, xpp, xpp2)
     ys = (ymm, yindex, ypp, ypp2)
     ts = (tmm, tindex, tpp, tpp2)
+    
+    return xs, x, ys, y, ts, t, nx, ny
+end
+
+function _get_cubic_args(u, p, t)
+    xs, x, ys, y, ts, t, nx, ny = _get_index2(u, p, t)
+    
+    xp = SVector{4}((1.0, x, x^2, x^3))
+    yp = SVector{4}((1.0, y, y^2, y^3))
+    tp = SVector{4}((1.0, t, t^2, t^3))
 
     return xs, ys, ts, xp, yp, tp, nx, ny
 end
@@ -473,8 +479,7 @@ Component-wise tricubic interpolation (Lekien-Marsden + finite differences for v
 Velocity field stored in `p.data[1]` and `p.data[2]`.
 """
 function uv_tricubic(u::SVector{2}, p, t)
-    args = _get_cubic_args(u, p, t)
-    return _interp2_tricubic(p.data[1], p.data[2], args...)
+    return _interp2_tricubic(p.data[1], p.data[2], _get_cubic_args(u, p, t)...)
 end
 
 """
@@ -485,8 +490,7 @@ specified in their paper) of scalar field at `u` at time `t`.
 Scalar field is assumed to be stored in `p.data[1]`.
 """
 function scalar_tricubic(u::StaticVector{2}, p, t::Float64)
-    args = _get_cubic_args(u, p, t)
-    return _interp1_tricubic(p.data[1], args...)
+    return _interp1_tricubic(p.data[1], _get_cubic_args(u, p, t)...)
 end
 
 @inline _to_raw_index(xi, yj, tk, nx, ny) = xi + nx*(yj + tk*ny) + 1
@@ -524,128 +528,71 @@ end
 
 # TRICUBIC GRADIENT INTERPOLATION
 
-function base_tricubic_interpolation_gradient(
-    xindex::Int, yindex::Int, tindex::Int,
-    xpp::Int, ypp::Int, tpp::Int,
-    xpp2::Int, ypp2::Int, tpp2::Int,
-    xmm::Int, ymm::Int, tmm::Int,
-    nx::Int, ny::Int,
-    x::T, y::T, t::T,
-    Us::U) where {T,U}
-xp = SVector{4,T}((1.0, x, x^2, x^3))
-dxp = SVector{4,T}((0.0, 1.0, 2*x, 3*x^2))
-yp = SVector{4,T}((1.0, y, y^2, y^3))
-dyp = SVector{4,T}((0.0, 1.0, 2*y, 3*y^2))
-tp = SVector{4,T}((1.0, t, t^2, t^3))
+function _get_cubic_grad_args(u, p, t)
+    xs, x, ys, y, ts, t, nx, ny = _get_index2(u, p, t)
 
-xs = (xmm, xindex, xpp, xpp2)
-ys = (ymm, yindex, ypp, ypp2)
-ts = (tmm, tindex, tpp, tpp2)
+    xp = SVector{4}((1.0, x, x^2, x^3))
+    dxp = SVector{4}((0.0, 1.0, 2*x, 3*x^2))
+    yp = SVector{4}((1.0, y, y^2, y^3))
+    dyp = SVector{4}((0.0, 1.0, 2*y, 3*y^2))
+    tp = SVector{4}((1.0, t, t^2, t^3))
 
-result1 = zero(T)
-result2 = zero(T)
-result3 = zero(T)
-
-@inbounds begin
-    uvals = @SArray [Us[_to_raw_index(xs[i], ys[j], ts[k], nx, ny)] for i in 1:4, j in 1:4, k in 1:4]
-    AFbyu = A_times_svec(F_times_svec(uvals))
-    for i in 1:4, j in 1:4, k in 1:4
-        curx = xp[i]
-        curdx = dxp[i]
-        cury = yp[j]
-        curdy = dyp[j]
-        curt = tp[k]
-        aval = AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
-        result1 += curdx*cury*curt*aval
-        result2 += curx*curdy*curt*aval
-        result3 += curx*cury*curt*aval
-    end
+    return xs, ys, ts, xp, dxp, yp, dyp, tp, nx, ny
 end
-return SVector{3,T}((result1/8.0, result2/8.0, result3/8.0))
+
+function _interp_grad_tricubic(Fs, xs, ys, ts, xp, dxp, yp, dyp, tp, nx, ny)
+    T = promote_type(eltype(Fs), eltype(xp))
+    result1 = zero(T)
+    result2 = zero(T)
+    result3 = zero(T)
+
+    @inbounds begin
+        fvals = @SArray [Fs[_to_raw_index(xs[i], ys[j], ts[k], nx, ny)] for i in 1:4, j in 1:4, k in 1:4]
+        AFbyu = A_times_svec(F_times_svec(fvals))
+        for i in 1:4, j in 1:4, k in 1:4
+            curx = xp[i]
+            curdx = dxp[i]
+            cury = yp[j]
+            curdy = dyp[j]
+            curt = tp[k]
+            aval = AFbyu[(i-1) + 4*(j-1) + 16*(k-1) + 1]
+            result1 += curdx*cury*curt*aval
+            result2 += curx*curdy*curt*aval
+            result3 += curx*cury*curt*aval
+        end
+    end
+    return SVector{3}((result1/8.0, result2/8.0, result3/8.0))
 end
 
 """
     scalar_tricubic_gradient(u,p,t)
 
-Calculates the (spatial) gradient of the function used in scalar_tricubic
+Calculates the (spatial) gradient of the interpolant obtained from [`scalar_tricubic`](@ref).
 """
-function scalar_tricubic_gradient(u::StaticVector{2,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
-    sshs = p.data[1]
-    return @inbounds _scalar_tricubic_gradient(u, sshs, p, t)
+function scalar_tricubic_gradient(u::StaticVector{2}, p::ItpMetadata, t)
+    res = _interp_grad_tricubic(p.data[1], _get_cubic_grad_args(u, p, t)...)
+    return SVector{2}((res[1]*p.nx/(p.UR[1] - p.LL[1]), res[2]*p.ny/(p.UR[2] - p.LL[2])))
 end
-
-
-function _scalar_tricubic_gradient(u::StaticVector{2,T}, sshs::U, p::ItpMetadata{S}, t::Float64) where {T<:Real,S,U}
-    nx, ny, nt = p.nx, p.ny, p.nt
-    ll1, ll2, t0 = p.LL
-    ur1, ur2, tf = p.UR
-
-    xmm, xindex, xpp, xpp2, xcoord = getIndex2(u[1],ll1,ur1, p.periods[1], nx, p.boundaryX)
-    ymm, yindex, ypp, ypp2, ycoord = getIndex2(u[2],ll2,ur2, p.periods[2], ny, p.boundaryY)
-    tmm, tindex, tpp, tpp2, tcoord = getIndex2(t, t0, tf, p.periods[3], nt, p.boundaryT)
-
-    res1 = base_tricubic_interpolation_gradient(xindex, yindex, tindex,
-                                                xpp, ypp, tpp,
-                                                xpp2, ypp2, tpp2,
-                                                xmm, ymm, tmm,
-                                                nx, ny,
-                                                xcoord, ycoord, tcoord,
-                                                sshs)
-
-    return SVector{2,T}((res1[1]*nx/(ur1-ll1), res1[2]*ny/(ur2-ll2)))
-end
-
 
 """
     uv_tricubic_eqvari(u,p,t)
 
 The rhs for solving the linearized flow of the vector field (u,v) with CoherentStructures.jl
 """
-function uv_tricubic_eqvari(u::StaticMatrix{2,3,T}, p::ItpMetadata{S}, t::Float64) where {T<:Real,S}
-    Us = p.data[1]
-    Vs = p.data[2]
-    return @inbounds _uv_tricubic_eqvari(u, Us, Vs, p, t)
+function uv_tricubic_eqvari(U::StaticMatrix{2,3}, p::ItpMetadata, t)
+    u = SVector{2}((U[1,1], U[2,1]))
+    args = _get_cubic_grad_args(u, p, t)    
+    Uitp = _interp_grad_tricubic(p.data[1], args...)
+    Vitp = _interp_grad_tricubic(p.data[2], args...)
+    scale1 = p.nx / (p.UR[1] - p.LL[1])
+    scale2 = p.ny / (p.UR[2] - p.LL[2])
+    return @SMatrix [Uitp[3] (Uitp[1]*U[1,2]*scale1 + Uitp[2]*U[2,2]*scale2) (Uitp[1]*U[1,3]*scale1 + Uitp[2]*U[2,3]*scale2);
+        Vitp[3] (Vitp[1]*U[1,2]*scale1 + Vitp[2]*U[2,2]*scale2) (Vitp[1]*U[1,3]*scale1 + Vitp[2]*U[2,3]*scale2)]
 end
 
-function _uv_tricubic_eqvari(uIn::StaticMatrix{2,3}, Us::U, Vs::U, p::ItpMetadata{S}, t::Float64) where {S,U}
-    u = SVector{2}((uIn[1,1], uIn[2,1]))
-    nx, ny, nt = p.nx, p.ny, p.nt
-    ll1, ll2, t0 = p.LL
-    ur1, ur2, tf = p.UR
-    px,py,pt = p.periods
+# interp_inbounds(x, y, p) = !isnan(p[3][x, y])
 
-    xmm, xindex, xpp, xpp2, xcoord = getIndex2(u[1], ll1, ur1, px, nx, p.boundaryX)
-    ymm, yindex, ypp, ypp2, ycoord = getIndex2(u[2], ll2, ur2, py, ny, p.boundaryY)
-    tmm, tindex, tpp, tpp2, tcoord = getIndex2(t, t0, tf, pt, nt, p.boundaryT)
-
-    Uitp = base_tricubic_interpolation_gradient(
-        xindex, yindex, tindex,
-        xpp, ypp, tpp,
-        xpp2, ypp2, tpp2,
-        xmm, ymm, tmm,
-        nx, ny,
-        xcoord, ycoord, tcoord,
-        Us)
-
-    Vitp = base_tricubic_interpolation_gradient(
-        xindex, yindex, tindex,
-        xpp, ypp, tpp,
-        xpp2, ypp2, tpp2,
-        xmm, ymm, tmm,
-        nx, ny,
-        xcoord, ycoord, tcoord,
-        Vs)
-
-    return @SMatrix [Uitp[3] (Uitp[1]*uIn[1,2]*nx/(ur1-ll1) + Uitp[2]*uIn[2,2]*ny/(ur2-ll2)) (Uitp[1]*uIn[1,3]*nx/(ur1-ll1) + Uitp[2]*uIn[2,3]*ny/(ur2-ll2));
-    Vitp[3] (Vitp[1]*uIn[1,2]*nx/(ur1-ll1)  + Vitp[2]*uIn[2,2]*ny/(ur2-ll2)) (Vitp[1]*uIn[1,3]*nx/(ur1-ll1) + Vitp[2]*uIn[2,3]*ny/(ur2-ll2))]
-end
-
-function interp_inbounds(x, y, p)
-    return !isnan(p[3][x, y])
-end
-function inbounds_checker_bilinear(x, y, p)
-    return !isnan(uv_trilinear(SVector{2,Float64}((x,y)), p[6], p[6][5][1])[1])
-end
+# inbounds_checker_bilinear(x, y, p) = !isnan(uv_trilinear(SVector{2,Float64}((x,y)), p[6], p[6][5][1])[1])
 
 """
     ssh_rhs(u, p, t)
