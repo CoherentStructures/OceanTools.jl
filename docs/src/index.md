@@ -32,11 +32,16 @@ The `OceanTools.jl` package provides julia utilities for reading in velocity and
 sea surface heights (ssh) from Copernicus datasets. This functionality relies on
 the [`NCDatasets.jl`](https://github.com/Alexander-Barth/NCDatasets.jl) package.
 
-There are also functions for interpolating the resulting values (trilinear + tricubic).
+There are also functions for interpolating the resulting values (trilinear and tricubic).
 
 Tricubic interpolation is implemented using the algorithm of Lekien and Marsden's
-[paper](http://www.cds.caltech.edu/~marsden/bib/2005/08-LeMa2005/LeMa2005.pdf),
-along with a function to obtain the gradient (in space) of the interpolation function.
+[paper](https://doi.org/10.1002/nme.1296), along with a function to obtain the
+gradient (in space) of the interpolation function. This is the only known (to us)
+Julia implementation of the three-dimensional tricubic interpolation. For other
+implementations, see the mirror of the original code
+[`libtricubic`](https://github.com/nbigaouette/libtricubic), and the Python packages
+[`pytricubic`](https://github.com/danielguterding/pytricubic) and
+[`eqtools`](https://github.com/PSFCPlasmaTools/eqtools).
 
 This gives a way of approximating geostrophic sea-surface velocities with the well-known formula
 
