@@ -13,7 +13,7 @@ Random.seed!(1234)
         @inferred OceanTools.getIndex(x, x0, xf, xper, nx, boundary)
         @inferred OceanTools.getIndex2(x, x0, xf, xper, nx, boundary)
     end
-    @inferred OceanTools.gooddivrem(x, nx)
+    @test (@inferred OceanTools.gooddivrem(x, nx)) == divrem(x, nx)
 end
 
 @testset "zero allocations" begin
@@ -34,19 +34,25 @@ end
 
     curpt = SVector{2}(10rand(2))
     t = 10rand()
-    @benchmark uv_tricubic($curpt, $metadata, $t)
-    @benchmark uv_trilinear($curpt, $metadata, $t)
-    curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1] 
+    # @benchmark uv_tricubic($curpt, $metadata, $t)
+    # @benchmark uv_trilinear($curpt, $metadata, $t)
+    curmat = @SMatrix [curpt[1] 1 0; curpt[2] 0 1]
 
     # type inference
     @inferred uv_trilinear(curpt, metadata, t)
+    @inferred scalar_trilinear(curpt, metadata, t)
     @inferred uv_tricubic(curpt, metadata, t)
+    @inferred scalar_tricubic(curpt, metadata, t)
 
     # zero allocations
     b = @benchmarkable uv_trilinear($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
 
+    b = @benchmarkable scalar_trilinear($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
+    
     b = @benchmarkable uv_tricubic($curpt, $metadata, $t)
     r = run(b; samples=3)
     @test r.allocs == 0
@@ -63,6 +69,7 @@ end
     r = run(b; samples=3)
     @test r.allocs == 0
 
-
-
+    b = @benchmarkable ssh_rhs($curpt, $metadata, $t)
+    r = run(b; samples=3)
+    @test r.allocs == 0
 end

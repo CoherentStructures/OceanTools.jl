@@ -43,14 +43,14 @@ Random.seed!(1234)
                 curpt = @SVector [x + 20*(rand(Int)%5),y]
                 #curpt = @SVector [x,y]
             else
-                curpt = @SVector [x,y]
+                curpt = @SVector [x, y]
             end
             res2 =  uv_tricubic(curpt, metadata, t)
         
-            res4 = scalar_tricubic(curpt,metadata2,t)
+            res4 = scalar_tricubic(curpt, metadata2, t)
             @test res4 == res2[1]
 
-            res5 = scalar_tricubic_gradient(curpt,metadata2,t)
+            res5 = scalar_tricubic_gradient(curpt, metadata2, t)
             gradu = gu([x,y,t])
             gradv = gv([x,y,t])
             #TODO: is this sufficiently exact?
@@ -62,8 +62,8 @@ Random.seed!(1234)
             res6 = uv_tricubic_eqvari(curmat, metadata, t)
             @test res6[1,1] == res2[1]
             @test res6[2,1] == res2[2]
-            @test res6[1,2] == res5[1]
-            @test res6[1,3] == res5[2]
+            @test res6[1,2] ≈ res5[1] rtol=eps()
+            @test res6[1,3] ≈ res5[2] rtol=eps()
             @test res6[2,2] ≈ gradv[1] rtol=2e-9
             @test res6[2,3] ≈ gradv[2] rtol=2e-9
 

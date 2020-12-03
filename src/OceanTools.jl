@@ -1,6 +1,6 @@
 module OceanTools
 
-    using Tensors, StaticArrays, SparseArrays, SharedArrays
+    using StaticArrays, SparseArrays, SharedArrays
 
     import FileIO
     import NCDatasets

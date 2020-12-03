@@ -1,4 +1,4 @@
-if Base.HOME_PROJECT[] != nothing
+if Base.HOME_PROJECT[] !== nothing
     Base.HOME_PROJECT[] = abspath(Base.HOME_PROJECT[])
 end
 
@@ -10,12 +10,13 @@ makedocs(
     sitename="OceanTools.jl",
     pages = Any[
         "Home" => "index.md"
-        "Loading NetCDF datafiles" => "loading_data.md"
+        "Loading NetCDF files" => "loading_data.md"
         "Interpolation" => "interpolation.md"
         "Example" => "example.md"
     ]
     )
 
 deploydocs(
-    repo = "github.com/CoherentStructures/OceanTools.jl.git"
+    repo = "github.com/CoherentStructures/OceanTools.jl.git",
+    push_preview = true,
 )
