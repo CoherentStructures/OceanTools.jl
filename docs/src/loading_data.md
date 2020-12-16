@@ -13,6 +13,12 @@
 * You have a regular expression (e.g. `r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$"`)
   that matches only the files you want (in what follows, argument `schema`).
 
+!!! warning
+    The package assumes that the velocities are *at grid points* as opposed to, for example, being in the center
+    of each grid cell. This assumption may not hold exactly for a velocity field used, including those
+    shown in examples here.
+
+
 ## Loading velocity fields
 
 ```@docs
