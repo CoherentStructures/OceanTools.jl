@@ -9,15 +9,14 @@
 * Each file corresponds to a single-time snapshot of this field (and spacing between
   times are constant).
 * The filenames are orded ascending with time.
-* Each file has a field with longitude and latitude coordinates as a 1d array (uniform accross files). 
+* Each file has a field with longitude and latitude coordinates as a 1d array (uniform accross files).
 * You have a regular expression (e.g. `r"^nrt_global_allsat_phy_l4_([0-9][0-9][0-9][0-9])([0-9][0-9])([0-9][0-9])_.*.nc$"`)
   that matches only the files you want (in what follows, argument `schema`).
 
 !!! warning
-    The package assumes that the velocities are *at grid points* as opposed to, for example, being in the center
-    of each grid cell. This assumption may not hold exactly for a velocity field used, including those
-    shown in examples here.
-
+    The package assumes that the velocities are given *at grid points* as opposed to,
+    for example, at the center of each grid cell. This assumption may not hold exactly
+    for a velocity field used, including those shown in examples here.
 
 ## Loading velocity fields
 

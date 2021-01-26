@@ -3,8 +3,10 @@ module OceanTools
     using StaticArrays, SparseArrays, SharedArrays
 
     import FileIO
-    import NCDatasets
+    import Tensors
     import Dates
+    
+    import NCDatasets
     const NCD = NCDatasets
 
     include("interpolation.jl")

@@ -12,4 +12,5 @@ export
    periodic,
    semiperiodic,
    flat,
-   outofbounds
+   outofbounds,
+   earthDiffTensor
