@@ -30,7 +30,7 @@ scalar_tricubic_gradient
 
 This function has not been extensively tested/used.
 
-## Velocity fields deriving from sea surface heights/Hamiltonians 
+## Velocity fields deriving from sea surface heights/Hamiltonians
 
 ```@docs
 ssh_rhs
@@ -74,7 +74,9 @@ an error.
 
 The easiest way to do this is to call the constructor
 
-    ItpMetadata(xspan,yspan,tspan, data, boundaryX,boundarY,boundaryT)
+```julia
+ItpMetadata(xspan, yspan, tspan, data, boundaryX, boundarY, boundaryT)
+```
 
 Here `xspan`, `yspan` and `tspan` are ranges that correspond to the values of the
 coordinates at the datapoints. For example, if you have a $2\pi$ periodic grid with

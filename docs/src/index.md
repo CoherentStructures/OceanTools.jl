@@ -10,7 +10,7 @@ These are written to be
 
 * as fast as possible
 * effectively parallelizable
-* easily usable from [`CoherentStructures.jl`](https://github.com/CoherentStructures/CoherentStructures.jl)
+* easily usable with [`CoherentStructures.jl`](https://github.com/CoherentStructures/CoherentStructures.jl)
 
 This package was developed by Nathanael Schilling at TUM, and is maintained
 by Daniel Karrasch (TUM).

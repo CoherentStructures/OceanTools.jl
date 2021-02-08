@@ -57,7 +57,7 @@ t = times[10]
 Plots.heatmap(xs, ys, (x,y) -> uv_tricubic((@SVector [x,y]), p, t)[1], title="Longitudinal velocity [deg/day]", color=:viridis, aspect_ratio=1.0)
 ```
 
-![](https://github.com/natschil/misc/raw/master/images/oceantools1.png)
+![heatmap of longitudinal component of interpolated velocity field](https://github.com/natschil/misc/raw/master/images/oceantools1.png)
 
 Notice how areas where the velocity field is missing (i.e. on land), the velocity is zero.
 Because knowing land areas is sometimes useful, the `ust1` variable contains a single time
@@ -71,9 +71,9 @@ p2, _  = read_ocean_scalars(ww_ocean_data, start_date, end_date; schema=schema, 
 Plots.heatmap(xs, ys, (x,y) -> scalar_tricubic((@SVector [x,y]), p2, t), title="Sea surface height anomaly [m]", color=:viridis, aspect_ratio=1.0)
 ```
 
-![](https://github.com/natschil/misc/raw/master/images/oceantools2.png)
+![sea surface height map](https://github.com/natschil/misc/raw/master/images/oceantools2.png)
 
-It is straightforward to plot trajectories of single particles, we'll make an
+It is straightforward to plot trajectories of single particles, we make an
 animation (download this [script](https://coherentstructures.github.io/CoherentStructures.jl/stable/videos/)
 into "animations.jl" for the `animatemp4` function):
 
@@ -113,7 +113,7 @@ fig = plot_vortices(vortices, singularities, (-5, -40), (7.5, -28);
     bg=bg, title="DBS field and transport barriers", showlabel=false)
 ```
 
-![](https://github.com/natschil/misc/raw/master/images/oceantools3.png)
+![material barriers](https://github.com/natschil/misc/raw/master/images/oceantools3.png)
 
 Computations on larger domains are of course possible. [Here](https://smai-jcm.centre-mersenne.org/item/SMAI-JCM_2020__6__101_0/)
 is a paper that computes similar structures as above using `OceanTools.jl` and
